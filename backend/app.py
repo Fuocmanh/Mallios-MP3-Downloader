@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import unicodedata
 import shutil
 import platform
 import sys
@@ -78,8 +79,13 @@ def is_allowed_origin(origin: str) -> bool:
     origin_lower = origin.lower()
     if origin_lower.startswith("chrome-extension://"):
         return True
-    if any(h in origin_lower for h in ["youtube.com", "localhost", "127.0.0.1"]):
-        return True
+    try:
+        parsed = urlparse(origin)
+        host = (parsed.hostname or "").lower()
+        if host in {"localhost", "127.0.0.1"} or host.endswith(".youtube.com") or host == "youtube.com" or host.endswith(".soundcloud.com") or host == "soundcloud.com":
+            return True
+    except Exception:
+        pass
     return False
 
 
@@ -257,7 +263,7 @@ def run_ytdlp_with_cookie_fallback(
     Nếu lỗi xác thực và có browser thì refresh cookies.txt và thử lại ngay.
     Nếu không có browser thì thử lại không cookie.
     """
-    cookies_file = PROJECT_ROOT / "cookies.txt"
+    cookies_file = CONFIGS_DIR / "cookies.txt"
     arguments = add_cookie_args(base_arguments)
 
     completed = run_ytdlp(arguments)
@@ -303,147 +309,12 @@ def select_folder():
     if request.method == "OPTIONS":
         return response({})
 
-    # Windows Common Item Dialog - chọn thư mục
-    # Hiển thị giao diện Folder + Select Folder + Cancel
+    # Windows FolderBrowserDialog - chọn thư mục nhanh chóng, không tốn thời gian compile
     script = r"""
 Add-Type -AssemblyName System.Windows.Forms
-
-$source = @'
-using System;
-using System.Runtime.InteropServices;
-
-public static class WindowsFolderPicker
-{
-    [ComImport]
-    [Guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7")]
-    private class FileOpenDialog
-    {
-    }
-
-    [ComImport]
-    [Guid("42f85136-db7e-439c-85f1-e4075d135fc8")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IFileDialog
-    {
-        [PreserveSig] int Show(IntPtr parent);
-        void SetFileTypes(uint cFileTypes, IntPtr filterSpec);
-        void SetFileTypeIndex(uint iFileType);
-        void GetFileTypeIndex(out uint piFileType);
-        void Advise(IntPtr pfde, out uint cookie);
-        void Unadvise(uint cookie);
-        void SetOptions(uint fos);
-        void GetOptions(out uint fos);
-        void SetDefaultFolder(IShellItem psi);
-        void SetFolder(IShellItem psi);
-        void GetFolder(out IShellItem ppsi);
-        void GetCurrentSelection(out IShellItem ppsi);
-        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
-        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
-        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
-        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
-        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
-        void GetResult(out IShellItem ppsi);
-        void AddPlace(IShellItem psi, uint fdap);
-        void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
-        void Close(int hr);
-        void SetClientGuid(ref Guid guid);
-        void ClearClientData();
-        void SetFilter(IntPtr pFilter);
-    }
-
-    [ComImport]
-    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellItem
-    {
-        void BindToHandler(
-            IntPtr pbc,
-            ref Guid bhid,
-            ref Guid riid,
-            out IntPtr ppv
-        );
-
-        void GetParent(out IShellItem ppsi);
-
-        void GetDisplayName(
-            uint sigdnName,
-            out IntPtr ppszName
-        );
-
-        void GetAttributes(
-            uint sfgaoMask,
-            out uint psfgaoAttribs
-        );
-
-        void Compare(
-            IShellItem psi,
-            uint hint,
-            out int piOrder
-        );
-    }
-
-    private const uint FOS_PICKFOLDERS = 0x00000020;
-    private const uint FOS_FORCEFILESYSTEM = 0x00000040;
-    private const uint FOS_PATHMUSTEXIST = 0x00000800;
-
-    private const uint SIGDN_FILESYSPATH = 0x80058000;
-
-    public static string Pick(IntPtr owner)
-    {
-        IFileDialog dialog = (IFileDialog)new FileOpenDialog();
-
-        try
-        {
-            uint options;
-            dialog.GetOptions(out options);
-
-            options |= FOS_PICKFOLDERS;
-            options |= FOS_FORCEFILESYSTEM;
-            options |= FOS_PATHMUSTEXIST;
-
-            dialog.SetOptions(options);
-
-            dialog.SetTitle("Chọn thư mục lưu nhạc MP3");
-            dialog.SetOkButtonLabel("Select Folder");
-
-            int result = dialog.Show(owner);
-
-            // Cancel
-            if (result != 0)
-                return "";
-
-            IShellItem item;
-            dialog.GetResult(out item);
-
-            IntPtr displayName;
-            item.GetDisplayName(
-                SIGDN_FILESYSPATH,
-                out displayName
-            );
-
-            try
-            {
-                return Marshal.PtrToStringUni(displayName) ?? "";
-            }
-            finally
-            {
-                if (displayName != IntPtr.Zero)
-                    Marshal.FreeCoTaskMem(displayName);
-            }
-        }
-        finally
-        {
-            if (dialog != null && Marshal.IsComObject(dialog))
-            {
-                Marshal.FinalReleaseComObject(dialog);
-            }
-        }
-    }
-}
-'@
-
-Add-Type -TypeDefinition $source -Language CSharp
-
+$fbd = New-Object System.Windows.Forms.FolderBrowserDialog
+$fbd.Description = 'Chọn thư mục lưu nhạc MP3'
+$fbd.ShowNewFolderButton = $true
 $form = New-Object System.Windows.Forms.Form
 $form.TopMost = $true
 $form.Width = 1
@@ -455,19 +326,15 @@ $form.Opacity = 0
 try {
     $form.Show()
     $form.Activate()
-
-    $folder = [WindowsFolderPicker]::Pick($form.Handle)
-
-    if ($folder) {
-        [Console]::OutputEncoding =
-            [System.Text.UTF8Encoding]::new()
-
-        Write-Output $folder
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+    if ($fbd.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
+        Write-Output $fbd.SelectedPath
     }
 }
 finally {
     $form.Close()
     $form.Dispose()
+    $fbd.Dispose()
 }
 """
 
@@ -594,7 +461,7 @@ def extract_playlist_links(playlist_url: str, max_files: int = 0) -> list[str]:
         if completed.returncode != 0 and is_cookie_auth_error(
             f"{completed.stdout}\n{completed.stderr}"
         ):
-            cookies_file = PROJECT_ROOT / "cookies.txt"
+            cookies_file = CONFIGS_DIR / "cookies.txt"
             if refresh_cookies_from_browser():
                 completed = subprocess.run(
                     [str(YTDLP_PATH), *base_arguments, "--cookies", str(cookies_file)],
@@ -636,26 +503,11 @@ def extract_playlist_links(playlist_url: str, max_files: int = 0) -> list[str]:
 
 
 def remove_vietnamese_accents(text: str) -> str:
-    accents = {
-        'a': 'áàảãạăắằẳẵặâấầẩẫậ',
-        'A': 'ÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬ',
-        'd': 'đ',
-        'D': 'Đ',
-        'e': 'éèẻẽẹêếềểễệ',
-        'E': 'ÉÈẺẼẸÊẾỀỂỄỆ',
-        'i': 'íìỉĩị',
-        'I': 'ÍÌỈĨỊ',
-        'o': 'óòỏõọôốồổỗộơớờởỡợ',
-        'O': 'ÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢ',
-        'u': 'úùủũụưứừửữự',
-        'U': 'ÚÙỦŨỤƯỨỪỬỮỰ',
-        'y': 'ýỳỷỹỵ',
-        'Y': 'ÝỲỶỸỴ'
-    }
-    for char, accented_chars in accents.items():
-        for acc in accented_chars:
-            text = text.replace(acc, char)
-    return text
+    if not text:
+        return ""
+    text = text.replace("đ", "d").replace("Đ", "D")
+    normalized = unicodedata.normalize("NFD", text)
+    return "".join(c for c in normalized if unicodedata.category(c) != "Mn")
 
 
 HISTORY_FILE = CONFIGS_DIR / "history.json"
@@ -760,9 +612,6 @@ def find_duplicate_file(save_folder: Path, clean_title: str) -> Path | None:
         pass
         
     return None
-
-
-HISTORY_BAK_FILE = BACKEND_DIR / "history.bak"
 
 
 def extract_youtube_video_id(url: str) -> str:
@@ -1111,7 +960,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                 if is_cookie_auth_error(combined_output):
                     retried_auth = True
                     if refresh_cookies_from_browser():
-                        arguments = [*base_download_args, "--cookies", str(PROJECT_ROOT / "cookies.txt")]
+                        arguments = [*base_download_args, "--cookies", str(CONFIGS_DIR / "cookies.txt")]
                         with PROGRESS_LOCK:
                             PARALLEL_PROGRESS[state_key]["started"] = False
                             PARALLEL_PROGRESS[state_key]["percent"] = 0.0
@@ -1123,7 +972,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                     if "--cookies" in arguments:
                         arguments = [
                             arg for arg in arguments
-                            if arg != "--cookies" and arg != str(PROJECT_ROOT / "cookies.txt")
+                            if arg != "--cookies" and arg != str(CONFIGS_DIR / "cookies.txt")
                         ]
                         with PROGRESS_LOCK:
                             PARALLEL_PROGRESS[state_key]["started"] = False
@@ -1361,13 +1210,20 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
 
 
 def cleanup_orphaned_processes():
-    """Tự động End Task toàn bộ các tiến trình yt-dlp/ffmpeg/aria2c mồ côi khi đã xong lượt tải."""
-    try:
-        subprocess.run("taskkill /F /IM yt-dlp.exe /T", shell=True, creationflags=CREATE_NO_WINDOW, capture_output=True)
-        subprocess.run("taskkill /F /IM aria2c.exe /T", shell=True, creationflags=CREATE_NO_WINDOW, capture_output=True)
-        subprocess.run("taskkill /F /IM ffmpeg.exe /T", shell=True, creationflags=CREATE_NO_WINDOW, capture_output=True)
-    except Exception:
-        pass
+    """Dọn dẹp an toàn các tiến trình tải con do Mallios quản lý."""
+    with ACTIVE_PROCESSES_LOCK:
+        for state_key, proc in list(ACTIVE_PROCESSES.items()):
+            try:
+                if proc.poll() is None:
+                    subprocess.run(
+                        f"taskkill /F /T /PID {proc.pid}",
+                        shell=True,
+                        creationflags=CREATE_NO_WINDOW,
+                        capture_output=True
+                    )
+            except Exception:
+                pass
+        ACTIVE_PROCESSES.clear()
 
 
 def cleanup_stray_temp_folders(folder: Path):
@@ -1923,6 +1779,11 @@ def get_direct_stream_url(video_url: str) -> str:
     """Lấy direct audio stream URL từ yt-dlp với cache RAM và khóa chống nghẽn luồng."""
     now = time.time()
     with PREVIEW_CACHE_LOCK:
+        # TTL Eviction: Tự động dọn dẹp các cache quá hạn để tránh phình bộ nhớ RAM
+        expired_keys = [k for k, v in PREVIEW_STREAM_CACHE.items() if now >= v[1]]
+        for k in expired_keys:
+            PREVIEW_STREAM_CACHE.pop(k, None)
+
         if video_url in PREVIEW_STREAM_CACHE:
             url, expire_time = PREVIEW_STREAM_CACHE[video_url]
             if now < expire_time:
@@ -1949,28 +1810,29 @@ def get_direct_stream_url(video_url: str) -> str:
         env["PYTHONIOENCODING"] = "utf-8"
         env["LANG"] = "en_US.UTF-8"
         
-        base_cmd = [
-            "-g", "-f", "ba/18/b",
-            "--extractor-args", "youtube:player_client=android",
-            "--no-playlist", "--no-warnings",
-            video_url
+        candidates = [
+            ["-g", "-f", "ba/b/best", "--no-playlist", "--no-warnings", video_url],
+            ["-g", "-f", "ba/18/b", "--extractor-args", "youtube:player_client=ios,mweb", "--no-playlist", "--no-warnings", video_url],
+            ["-g", "-f", "ba/18/b", "--extractor-args", "youtube:player_client=android", "--no-playlist", "--no-warnings", video_url]
         ]
-        cmd = [str(YTDLP_PATH), *add_cookie_args(base_cmd)]
-        try:
-            completed = subprocess.run(
-                cmd,
-                capture_output=True, text=True, encoding="utf-8", errors="replace",
-                creationflags=CREATE_NO_WINDOW, timeout=12, env=env
-            )
-            if completed.returncode == 0:
-                lines = [l.strip() for l in completed.stdout.splitlines() if l.strip() and l.startswith("http")]
-                if lines:
-                    direct_url = lines[0]
-                    with PREVIEW_CACHE_LOCK:
-                        PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 1800)
-                    return direct_url
-        except Exception:
-            pass
+
+        for base_cmd in candidates:
+            cmd = [str(YTDLP_PATH), *add_cookie_args(base_cmd)]
+            try:
+                completed = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    creationflags=CREATE_NO_WINDOW, timeout=12, env=env
+                )
+                if completed.returncode == 0:
+                    lines = [l.strip() for l in completed.stdout.splitlines() if l.strip() and l.startswith("http")]
+                    if lines:
+                        direct_url = lines[0]
+                        with PREVIEW_CACHE_LOCK:
+                            PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 1800)
+                        return direct_url
+            except Exception:
+                pass
         return ""
     finally:
         with PREVIEW_CACHE_LOCK:
@@ -1994,6 +1856,37 @@ def preview_stream():
         return response({"status": "error", "message": "Không thể lấy luồng âm thanh nghe thử."}, 500)
 
     return redirect(direct_url, code=302)
+
+
+@app.route("/api/preload-playlist", methods=["POST", "OPTIONS"])
+def preload_playlist():
+    """Nạp trước ngầm luồng âm thanh của các bài hát trong danh sách để nghe thử tức thì."""
+    if request.method == "OPTIONS":
+        return response({"status": "ok"})
+    data = request.get_json(silent=True) or {}
+    urls = data.get("urls", [])
+    if isinstance(urls, list) and urls:
+        # Nạp trước tối đa 5 bài đầu tiên vào RAM cache
+        background_preload_streams(urls[:5])
+    return response({"status": "success"})
+
+
+@app.route("/api/sync-cookies", methods=["POST", "OPTIONS"])
+def sync_cookies():
+    """Nhận và cập nhật tệp cookies.txt trực tiếp từ phiên đăng nhập trình duyệt của Extension."""
+    if request.method == "OPTIONS":
+        return response({"status": "ok"})
+    data = request.get_json(silent=True) or {}
+    cookies_content = data.get("cookies_content", "").strip()
+    if cookies_content:
+        cookie_path = CONFIGS_DIR / "cookies.txt"
+        try:
+            with open(cookie_path, "w", encoding="utf-8") as f:
+                f.write(cookies_content)
+            return response({"status": "success", "message": "Đã cập nhật cookies thành công!"})
+        except Exception as e:
+            return response({"status": "error", "message": str(e)}, 500)
+    return response({"status": "error", "message": "Nội dung cookie trống."}, 400)
 
 
 @app.route("/open-folder", methods=["POST", "OPTIONS"])

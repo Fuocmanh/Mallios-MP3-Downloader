@@ -26,44 +26,46 @@ public static class MalliosNativeHost
     private static void StartBackend()
     {
         var root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".."));
-        
-        var pythonw = Path.Combine(root, "runtime", "python", "pythonw.exe");
-        var python = Path.Combine(root, "runtime", "python", "python.exe");
         var appPy = Path.Combine(root, "backend", "app.py");
+
+        if (File.Exists(appPy))
+        {
+            var candidates = new[]
+            {
+                Path.Combine(root, "runtime", "python", "pythonw.exe"),
+                Path.Combine(root, ".venv", "Scripts", "pythonw.exe"),
+                Path.Combine(root, "runtime", "python", "python.exe"),
+                Path.Combine(root, ".venv", "Scripts", "python.exe"),
+                "pythonw.exe",
+                "python.exe"
+            };
+
+            foreach (var py in candidates)
+            {
+                if (py.Contains(Path.DirectorySeparatorChar.ToString()) && !File.Exists(py))
+                    continue;
+
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = py,
+                        Arguments = "\"" + appPy + "\"",
+                        WorkingDirectory = root,
+                        UseShellExecute = true,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    };
+                    Process.Start(psi);
+                    return;
+                }
+                catch
+                {
+                    // Thu candidate tiep theo
+                }
+            }
+        }
+
         var legacyAppExe = Path.Combine(root, "app", "app.exe");
-
-
-        // Priority 1: pythonw.exe (runs silently with no console window popup)
-        if (File.Exists(pythonw) && File.Exists(appPy))
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = pythonw,
-                Arguments = "\"" + appPy + "\"",
-                WorkingDirectory = root,
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-            Process.Start(psi);
-            return;
-        }
-
-        // Priority 2: python.exe (fallback)
-        if (File.Exists(python) && File.Exists(appPy))
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = python,
-                Arguments = "\"" + appPy + "\"",
-                WorkingDirectory = root,
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-            Process.Start(psi);
-            return;
-        }
-
-        // Priority 3: app.exe
         if (File.Exists(legacyAppExe))
         {
             var psi = new ProcessStartInfo

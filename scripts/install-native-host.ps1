@@ -32,7 +32,10 @@ $registryKeys = @(
     'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.mallios.mp3',
     'HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.mallios.mp3',
     'HKCU:\Software\CocCoc\Browser\NativeMessagingHosts\com.mallios.mp3',
-    'HKCU:\Software\Chromium\NativeMessagingHosts\com.mallios.mp3'
+    'HKCU:\Software\Chromium\NativeMessagingHosts\com.mallios.mp3',
+    'HKCU:\Software\Opera Software\Opera Stable\NativeMessagingHosts\com.mallios.mp3',
+    'HKCU:\Software\Opera Software\Opera GX Stable\NativeMessagingHosts\com.mallios.mp3',
+    'HKCU:\Software\Vivaldi\NativeMessagingHosts\com.mallios.mp3'
 )
 
 foreach ($key in $registryKeys) {

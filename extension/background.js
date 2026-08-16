@@ -99,7 +99,45 @@ async function loginWithGoogleIdentity() {
   });
 }
 
+async function syncYouTubeCookies() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.cookies) {
+        resolve({ ok: false, error: "no_cookies_permission" });
+        return;
+      }
+      chrome.cookies.getAll({ domain: ".youtube.com" }, async (cookies) => {
+        if (!cookies || cookies.length === 0) {
+          resolve({ ok: false, message: "no_cookies_found" });
+          return;
+        }
+        let netscape = "# Netscape HTTP Cookie File\n# Exported by Mallios Extension\n\n";
+        for (const c of cookies) {
+          const domain = c.domain.startsWith(".") ? c.domain : `.${c.domain}`;
+          const flag = "TRUE";
+          const path = c.path || "/";
+          const secure = c.secure ? "TRUE" : "FALSE";
+          const expiry = Math.floor(c.expirationDate || (Date.now() / 1000 + 86400 * 365));
+          netscape += `${domain}\t${flag}\t${path}\t${secure}\t${expiry}\t${c.name}\t${c.value}\n`;
+        }
+        const res = await proxyApiRequest("/api/sync-cookies", {
+          method: "POST",
+          body: JSON.stringify({ cookies_content: netscape })
+        });
+        resolve({ ok: res.ok, status: res.status });
+      });
+    } catch (e) {
+      resolve({ ok: false, error: e.message });
+    }
+  });
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "sync-cookies") {
+    syncYouTubeCookies().then(sendResponse);
+    return true;
+  }
+
   if (message?.type === "check-health") {
     checkServerHealth().then(sendResponse);
     return true;

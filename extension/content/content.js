@@ -1557,6 +1557,7 @@ function getFileListOutput() {
     }
 
     // --- TRÌNH PHÁT NGHE THỬ ÂM THANH (TAB 2) ---
+    // --- TRÌNH PHÁT NGHE THỬ ÂM THANH (TAB 2) ---
     const previewBar = document.getElementById('yt-preview-player-bar');
     const previewTitle = document.getElementById('yt-preview-title');
     const previewAudio = document.getElementById('yt-preview-audio-element');
@@ -1574,6 +1575,36 @@ function getFileListOutput() {
     let currentPreviewUrl = null;
     let isAutoplayEnabled = true;
     let isUserSeeking = false;
+
+    // Trình phát iframe YouTube nhúng ngầm (không phụ thuộc bot check backend)
+    let activePlayerMode = 'iframe'; // 'iframe' hoặc 'audio'
+    let iframeDuration = 0;
+    let iframeCurrentTime = 0;
+    let iframeIsPlaying = false;
+
+    function getOrCreatePreviewIframe() {
+      let iframe = document.getElementById('yt-preview-hidden-iframe');
+      if (!iframe) {
+        const wrapper = document.createElement('div');
+        wrapper.id = 'yt-preview-iframe-wrapper';
+        wrapper.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;';
+        wrapper.innerHTML = '<iframe id="yt-preview-hidden-iframe" allow="autoplay" src="" style="width:1px;height:1px;border:none;"></iframe>';
+        document.body.appendChild(wrapper);
+        iframe = document.getElementById('yt-preview-hidden-iframe');
+      }
+      return iframe;
+    }
+
+    function sendIframeCommand(func, args = "") {
+      const iframe = getOrCreatePreviewIframe();
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({
+          event: 'command',
+          func: func,
+          args: args
+        }), '*');
+      }
+    }
 
     function formatTime(seconds) {
       if (isNaN(seconds) || seconds < 0) return "00:00";
@@ -1608,6 +1639,47 @@ function getFileListOutput() {
       });
     }
 
+    function togglePreviewPlayState() {
+      if (activePlayerMode === 'iframe') {
+        if (iframeIsPlaying) {
+          sendIframeCommand('pauseVideo');
+          iframeIsPlaying = false;
+          previewToggleBtn.innerHTML = '▶';
+          updateItemPlayBtns('▶');
+        } else {
+          sendIframeCommand('playVideo');
+          iframeIsPlaying = true;
+          previewToggleBtn.innerHTML = '⏸';
+          updateItemPlayBtns('⏸');
+        }
+      } else if (previewAudio) {
+        if (previewAudio.paused) {
+          previewAudio.play().catch(() => {});
+        } else {
+          previewAudio.pause();
+        }
+      }
+    }
+
+    function seekPreview(targetTime) {
+      if (activePlayerMode === 'iframe') {
+        sendIframeCommand('seekTo', [targetTime, true]);
+        iframeCurrentTime = targetTime;
+        previewCurrentTime.textContent = formatTime(targetTime);
+      } else if (previewAudio) {
+        previewAudio.currentTime = targetTime;
+      }
+    }
+
+    function seekPreviewRelative(delta) {
+      if (activePlayerMode === 'iframe') {
+        const newT = Math.max(0, Math.min(iframeDuration || 9999, iframeCurrentTime + delta));
+        seekPreview(newT);
+      } else if (previewAudio && previewAudio.duration) {
+        previewAudio.currentTime = Math.max(0, Math.min(previewAudio.duration, previewAudio.currentTime + delta));
+      }
+    }
+
     function startPreviewSongByIndex(index, shouldPlay = true) {
       if (!currentPlaylistItems || currentPlaylistItems.length === 0) return;
       if (index < 0) index = currentPlaylistItems.length - 1;
@@ -1636,46 +1708,131 @@ function getFileListOutput() {
         allItemDivs[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
 
-      // Lấy danh sách đoạn cắt SponsorBlock nếu bật
+      // Đồng bộ cookie phiên làm việc hiện tại của trình duyệt sang server trong nền
+      try {
+        chrome.runtime.sendMessage({ type: 'sync-cookies' }).catch(() => {});
+      } catch (_) {}
+
       const videoId = extractVideoId(item.url);
+
+      // Lấy danh sách đoạn cắt SponsorBlock nếu bật
       if (videoId && optSponsorBlock && optSponsorBlock.checked) {
         fetchSponsorBlockSegments(videoId).then(segments => {
           if (currentPreviewUrl === item.url) {
             currentPreviewSegments = segments;
-            // Nếu intro bắt đầu từ đầu bài (0s - Xs)
             if (segments.length > 0 && segments[0].start <= 2.5) {
-              if (previewAudio.currentTime < segments[0].end) {
-                previewAudio.currentTime = segments[0].end;
-                lastSkippedSegmentEnd = segments[0].end;
-                showStatus(`⚡ Bỏ qua intro, phát ngay từ ${formatTime(segments[0].end)}`, '#c2efb3');
-              }
+              const skipTo = segments[0].end;
+              lastSkippedSegmentEnd = skipTo;
+              seekPreview(skipTo);
+              showStatus(`⚡ Bỏ qua intro, phát ngay từ ${formatTime(skipTo)}`, '#c2efb3');
             }
           }
         });
       }
 
-      previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
-      previewAudio.load();
-      if (shouldPlay) {
-        previewAudio.play().catch(err => {
-          console.log("Đang tải luồng âm thanh...", err);
-        });
+      if (videoId) {
+        // Mode 1: Phát trực tiếp qua YouTube Embedded Player (100% mượt mà, không bị bot block)
+        activePlayerMode = 'iframe';
+        if (previewAudio) {
+          previewAudio.pause();
+          previewAudio.src = '';
+        }
+
+        const iframe = getOrCreatePreviewIframe();
+        iframeDuration = 0;
+        iframeCurrentTime = 0;
+        iframeIsPlaying = shouldPlay;
+
+        const origin = encodeURIComponent(window.location.origin);
+        iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&autoplay=1&origin=${origin}`;
+
+        // Cài đặt âm lượng từ thanh volume
+        setTimeout(() => {
+          const volSlider = document.getElementById('yt-preview-vol-slider');
+          const vol = volSlider ? parseFloat(volSlider.value) : 1;
+          sendIframeCommand('setVolume', [Math.round(vol * 100)]);
+          if (shouldPlay) sendIframeCommand('playVideo');
+        }, 300);
+
+      } else {
+        // Mode 2: Fallback qua API máy chủ cho SoundCloud / URL khác
+        activePlayerMode = 'audio';
+        const iframe = document.getElementById('yt-preview-hidden-iframe');
+        if (iframe) iframe.src = '';
+
+        previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
+        previewAudio.load();
+        if (shouldPlay) {
+          previewAudio.play().catch(err => {
+            console.log("Đang tải luồng âm thanh...", err);
+          });
+        }
       }
 
-      // Nạp trước bài tiếp theo trong nền để chuyển bài siêu mượt
+      // Nạp trước danh sách luồng âm thanh bài tiếp theo
       const nextIdx = (index + 1) % currentPlaylistItems.length;
       if (currentPlaylistItems[nextIdx] && currentPlaylistItems[nextIdx].url) {
         fetch(`${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(currentPlaylistItems[nextIdx].url)}`).catch(() => {});
       }
     }
 
+    // Lắng nghe sự kiện từ YouTube Embedded Player ngầm
+    window.addEventListener('message', (event) => {
+      if (activePlayerMode !== 'iframe') return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (!data) return;
+
+        if (data.event === 'onReady') {
+          const volSlider = document.getElementById('yt-preview-vol-slider');
+          const vol = volSlider ? parseFloat(volSlider.value) : 1;
+          sendIframeCommand('setVolume', [Math.round(vol * 100)]);
+        }
+
+        if (data.event === 'infoDelivery' && data.info) {
+          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
+            iframeDuration = data.info.duration;
+            previewTotalTime.textContent = formatTime(iframeDuration);
+          }
+          if (typeof data.info.currentTime === 'number') {
+            iframeCurrentTime = data.info.currentTime;
+            if (!isUserSeeking && iframeDuration > 0) {
+              previewSeekBar.value = (iframeCurrentTime / iframeDuration) * 100;
+              previewCurrentTime.textContent = formatTime(iframeCurrentTime);
+              checkAndSkipSponsorBlock(null, currentPreviewSegments, true, iframeCurrentTime, (newT) => {
+                seekPreview(newT);
+              });
+            }
+          }
+          if (typeof data.info.playerState === 'number') {
+            const state = data.info.playerState;
+            if (state === 1) { // PLAYING
+              iframeIsPlaying = true;
+              previewToggleBtn.innerHTML = '⏸';
+              updateItemPlayBtns('⏸');
+            } else if (state === 2) { // PAUSED
+              iframeIsPlaying = false;
+              previewToggleBtn.innerHTML = '▶';
+              updateItemPlayBtns('▶');
+            } else if (state === 0) { // ENDED
+              iframeIsPlaying = false;
+              if (isAutoplayEnabled && currentPlaylistItems.length > 0) {
+                playNextPreview(true);
+              } else {
+                previewToggleBtn.innerHTML = '▶';
+                updateItemPlayBtns('▶');
+                previewSeekBar.value = 0;
+                previewCurrentTime.textContent = '00:00';
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    });
+
     function togglePreviewSong(item, itemBtn) {
       if (currentPreviewUrl === item.url) {
-        if (previewAudio.paused) {
-          previewAudio.play().catch(() => {});
-        } else {
-          previewAudio.pause();
-        }
+        togglePreviewPlayState();
         return;
       }
 
@@ -1694,9 +1851,8 @@ function getFileListOutput() {
 
     function playPrevPreview() {
       if (!currentPlaylistItems || currentPlaylistItems.length === 0) return;
-      if (previewAudio && previewAudio.currentTime > 3) {
-        previewAudio.currentTime = 0;
-        previewAudio.play().catch(() => {});
+      if ((activePlayerMode === 'iframe' && iframeCurrentTime > 3) || (activePlayerMode === 'audio' && previewAudio && previewAudio.currentTime > 3)) {
+        seekPreview(0);
         return;
       }
       let prevIndex = currentPreviewIndex - 1;
@@ -1708,35 +1864,43 @@ function getFileListOutput() {
 
     if (previewAudio) {
       previewAudio.addEventListener('playing', () => {
-        previewToggleBtn.innerHTML = '⏸';
-        updateItemPlayBtns('⏸');
+        if (activePlayerMode === 'audio') {
+          previewToggleBtn.innerHTML = '⏸';
+          updateItemPlayBtns('⏸');
+        }
       });
 
       previewAudio.addEventListener('pause', () => {
-        previewToggleBtn.innerHTML = '▶';
-        updateItemPlayBtns('▶');
+        if (activePlayerMode === 'audio') {
+          previewToggleBtn.innerHTML = '▶';
+          updateItemPlayBtns('▶');
+        }
       });
 
       previewAudio.addEventListener('error', (e) => {
-        console.warn("Lỗi tải audio preview:", e);
-        previewToggleBtn.innerHTML = '▶';
-        updateItemPlayBtns('▶');
-        showStatus('⚠️ Nguồn YouTube đang được kết nối lại, vui lòng bấm ▶ thử lại!', '#f2b8b5');
+        if (activePlayerMode === 'audio') {
+          console.warn("Lỗi tải audio preview:", e);
+          previewToggleBtn.innerHTML = '▶';
+          updateItemPlayBtns('▶');
+          showStatus('⚠️ Nguồn đang kết nối lại, vui lòng bấm ▶ thử lại!', '#f2b8b5');
+        }
       });
 
       previewAudio.addEventListener('ended', () => {
-        if (isAutoplayEnabled && currentPlaylistItems.length > 0) {
-          playNextPreview(true);
-        } else {
-          previewToggleBtn.innerHTML = '▶';
-          updateItemPlayBtns('▶');
-          previewSeekBar.value = 0;
-          previewCurrentTime.textContent = '00:00';
+        if (activePlayerMode === 'audio') {
+          if (isAutoplayEnabled && currentPlaylistItems.length > 0) {
+            playNextPreview(true);
+          } else {
+            previewToggleBtn.innerHTML = '▶';
+            updateItemPlayBtns('▶');
+            previewSeekBar.value = 0;
+            previewCurrentTime.textContent = '00:00';
+          }
         }
       });
 
       previewAudio.addEventListener('timeupdate', () => {
-        if (!isUserSeeking && previewAudio.duration) {
+        if (activePlayerMode === 'audio' && !isUserSeeking && previewAudio.duration) {
           const percent = (previewAudio.currentTime / previewAudio.duration) * 100;
           previewSeekBar.value = percent;
           previewCurrentTime.textContent = formatTime(previewAudio.currentTime);
@@ -1745,20 +1909,13 @@ function getFileListOutput() {
       });
 
       previewAudio.addEventListener('loadedmetadata', () => {
-        if (previewAudio.duration) {
+        if (activePlayerMode === 'audio' && previewAudio.duration) {
           previewTotalTime.textContent = formatTime(previewAudio.duration);
-        }
-        // Kiểm tra lại đoạn intro nếu tải xong metadata
-        if (currentPreviewSegments && currentPreviewSegments.length > 0) {
-          if (currentPreviewSegments[0].start <= 2.5 && previewAudio.currentTime < currentPreviewSegments[0].end) {
-            previewAudio.currentTime = currentPreviewSegments[0].end;
-            lastSkippedSegmentEnd = currentPreviewSegments[0].end;
-          }
         }
       });
 
       previewAudio.addEventListener('durationchange', () => {
-        if (previewAudio.duration) {
+        if (activePlayerMode === 'audio' && previewAudio.duration) {
           previewTotalTime.textContent = formatTime(previewAudio.duration);
         }
       });
@@ -1772,11 +1929,7 @@ function getFileListOutput() {
           }
           return;
         }
-        if (previewAudio.paused) {
-          previewAudio.play().catch(() => {});
-        } else {
-          previewAudio.pause();
-        }
+        togglePreviewPlayState();
       });
     }
 
@@ -1804,10 +1957,13 @@ function getFileListOutput() {
 
     if (previewCloseBtn) {
       previewCloseBtn.addEventListener('click', () => {
+        const iframe = document.getElementById('yt-preview-hidden-iframe');
+        if (iframe) iframe.src = '';
         if (previewAudio) {
           previewAudio.pause();
           previewAudio.src = '';
         }
+        iframeIsPlaying = false;
         currentPreviewUrl = null;
         currentPreviewIndex = -1;
         if (previewBar) previewBar.style.display = 'none';
@@ -1819,31 +1975,35 @@ function getFileListOutput() {
     const previewVolBtn = document.getElementById('yt-preview-vol-btn');
     const previewVolSlider = document.getElementById('yt-preview-vol-slider');
 
-    if (previewVolSlider && previewAudio) {
+    if (previewVolSlider) {
       const savedVol = localStorage.getItem('mallios_preview_vol');
       if (savedVol !== null) {
         previewVolSlider.value = savedVol;
-        previewAudio.volume = parseFloat(savedVol);
+        if (previewAudio) previewAudio.volume = parseFloat(savedVol);
       }
       previewVolSlider.addEventListener('input', () => {
         const vol = parseFloat(previewVolSlider.value);
-        previewAudio.volume = vol;
+        if (previewAudio) previewAudio.volume = vol;
+        sendIframeCommand('setVolume', [Math.round(vol * 100)]);
         localStorage.setItem('mallios_preview_vol', String(vol));
         if (previewVolBtn) previewVolBtn.textContent = vol === 0 ? '🔇' : (vol < 0.5 ? '🔉' : '🔊');
       });
     }
 
-    if (previewVolBtn && previewVolSlider && previewAudio) {
+    if (previewVolBtn && previewVolSlider) {
       previewVolBtn.addEventListener('click', () => {
-        if (previewAudio.volume > 0) {
-          previewAudio.dataset.lastVol = String(previewAudio.volume);
-          previewAudio.volume = 0;
+        const curVol = parseFloat(previewVolSlider.value);
+        if (curVol > 0) {
+          previewVolBtn.dataset.lastVol = String(curVol);
           previewVolSlider.value = 0;
+          if (previewAudio) previewAudio.volume = 0;
+          sendIframeCommand('setVolume', [0]);
           previewVolBtn.textContent = '🔇';
         } else {
-          const lastVol = parseFloat(previewAudio.dataset.lastVol || '1');
-          previewAudio.volume = lastVol;
+          const lastVol = parseFloat(previewVolBtn.dataset.lastVol || '1');
           previewVolSlider.value = lastVol;
+          if (previewAudio) previewAudio.volume = lastVol;
+          sendIframeCommand('setVolume', [Math.round(lastVol * 100)]);
           previewVolBtn.textContent = lastVol < 0.5 ? '🔉' : '🔊';
         }
       });
@@ -1854,15 +2014,18 @@ function getFileListOutput() {
       previewSeekBar.addEventListener('touchstart', () => { isUserSeeking = true; });
 
       previewSeekBar.addEventListener('input', () => {
-        if (previewAudio && previewAudio.duration) {
-          const targetTime = (previewSeekBar.value / 100) * previewAudio.duration;
+        const dur = activePlayerMode === 'iframe' ? iframeDuration : (previewAudio ? previewAudio.duration : 0);
+        if (dur) {
+          const targetTime = (previewSeekBar.value / 100) * dur;
           previewCurrentTime.textContent = formatTime(targetTime);
         }
       });
 
       previewSeekBar.addEventListener('change', () => {
-        if (previewAudio && previewAudio.duration) {
-          previewAudio.currentTime = (previewSeekBar.value / 100) * previewAudio.duration;
+        const dur = activePlayerMode === 'iframe' ? iframeDuration : (previewAudio ? previewAudio.duration : 0);
+        if (dur) {
+          const targetTime = (previewSeekBar.value / 100) * dur;
+          seekPreview(targetTime);
         }
         isUserSeeking = false;
       });
@@ -2581,28 +2744,27 @@ function getFileListOutput() {
     window.addEventListener('keydown', (e) => {
       const isInputFocused = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
       if (isInputFocused) return;
-      if (!panel || panel.style.display === 'none') return;
+      if (!win || !win.classList.contains('active')) return;
 
       if (e.code === 'Space') {
         e.preventDefault();
-        if (previewAudio && previewAudio.src && previewBar && previewBar.style.display !== 'none') {
-          if (previewAudio.paused) previewAudio.play().catch(() => {});
-          else previewAudio.pause();
+        if (previewBar && previewBar.style.display !== 'none') {
+          togglePreviewPlayState();
         } else if (audioElement && audioElement.src && historyPlayer && historyPlayer.style.display !== 'none') {
           if (audioElement.paused) audioElement.play().catch(() => {});
           else audioElement.pause();
         }
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
-        if (previewAudio && previewAudio.duration && previewBar && previewBar.style.display !== 'none') {
-          previewAudio.currentTime = Math.max(0, previewAudio.currentTime - 5);
+        if (previewBar && previewBar.style.display !== 'none') {
+          seekPreviewRelative(-5);
         } else if (audioElement && audioElement.duration && historyPlayer && historyPlayer.style.display !== 'none') {
           audioElement.currentTime = Math.max(0, audioElement.currentTime - 5);
         }
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
-        if (previewAudio && previewAudio.duration && previewBar && previewBar.style.display !== 'none') {
-          previewAudio.currentTime = Math.min(previewAudio.duration, previewAudio.currentTime + 5);
+        if (previewBar && previewBar.style.display !== 'none') {
+          seekPreviewRelative(5);
         } else if (audioElement && audioElement.duration && historyPlayer && historyPlayer.style.display !== 'none') {
           audioElement.currentTime = Math.min(audioElement.duration, audioElement.currentTime + 5);
         }

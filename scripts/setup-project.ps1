@@ -133,9 +133,29 @@ if (Test-Path $embeddedPython) {
             }
         } catch {
             $pythonExe = $sysPython.Source
-        }
     } else {
-        Write-Host "      [!] Khong tim thay Python tren may. Vui long cai dat Python 3.10+ hoac tai ban portable." -ForegroundColor Red
+        # Thu cai dat Python tu dong bang winget neu he thong co ho tro
+        $wingetCmd = Get-Command "winget" -ErrorAction SilentlyContinue
+        if ($wingetCmd) {
+            Write-Host "      -> Dang tu dong tai & cai dat Python 3.11 qua Windows Package Manager (winget)..." -ForegroundColor Cyan
+            try {
+                & winget install Python.Python.3.11 --accept-source-agreements --accept-package-agreements --silent
+                Start-Sleep -Seconds 3
+                $sysPython = Get-Command "python" -ErrorAction SilentlyContinue
+                if ($sysPython) {
+                    Write-Host "      -> Cai dat Python he thong thanh cong!" -ForegroundColor Green
+                    & python -m venv "$ProjectRoot\.venv"
+                    if (Test-Path $venvPython) {
+                        $pythonExe = $venvPython
+                    }
+                }
+            } catch {
+                Write-Host "      [!] Khong the tu dong cai Python qua winget." -ForegroundColor Yellow
+            }
+        }
+        if (-not $pythonExe) {
+            Write-Host "      [!] Khong tim thay Python tren may. Vui long cai dat Python 3.10+ (tich chon 'Add python.exe to PATH')." -ForegroundColor Red
+        }
     }
 }
 

@@ -946,8 +946,8 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     effective_save_folder = save_folder
     temp_drive_dir = None
     if save_target == "drive":
-        # Tạo thư mục tạm cô lập hoàn toàn cho Drive để không làm rác thư mục máy tính
-        temp_drive_dir = PROJECT_ROOT / "downloads" / ".temp_drive" / str(int(time.time())) / str(abs(hash(link)) % 10000000)
+        # Tạo thư mục tạm cô lập trong AppData/Temp của Windows để tuyệt đối không tạo file trong thư mục người dùng
+        temp_drive_dir = Path(tempfile.gettempdir()) / "mallios_cache" / "drive" / str(int(time.time())) / str(abs(hash(link)) % 10000000)
         temp_drive_dir.mkdir(parents=True, exist_ok=True)
         effective_save_folder = temp_drive_dir
 
@@ -964,7 +964,8 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     env["PYTHONIOENCODING"] = "utf-8"
     env["LANG"] = "en_US.UTF-8"
 
-    temp_dl_dir = effective_save_folder / f".temp_dl_{state_key}"
+    # Thư mục chứa các phần tải tạm thời .part, .ytdl đặt trong AppData/Temp của Windows
+    temp_dl_dir = Path(tempfile.gettempdir()) / "mallios_cache" / f"dl_{state_key}_{int(time.time() * 1000)}_{abs(hash(link)) % 10000}"
     temp_dl_dir.mkdir(parents=True, exist_ok=True)
 
     postprocessor_args = "ffmpeg:-threads 0 -preset ultrafast"
@@ -1327,6 +1328,20 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                 del ACTIVE_PROCESSES[state_key]
 
 
+def cleanup_stray_temp_folders(folder: Path):
+    """Xóa sạch mọi thư mục rác .temp_dl_* còn sót lại trong thư mục người dùng."""
+    try:
+        if folder and folder.is_dir():
+            for p in list(folder.glob(".temp_dl_*")):
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+            for p in list(folder.glob(".temp_drive*")):
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+    except Exception:
+        pass
+
+
 def run_parallel_downloads_background(links: list[str], quality: str, save_folder: Path, max_files: int, save_target: str = "local", options: dict = None):
     global PROGRESS_STATE, PARALLEL_PROGRESS, CANCEL_REQUESTED, MATCHING_DUPLICATE_FILES
 
@@ -1334,6 +1349,9 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
     MATCHING_DUPLICATE_FILES = []
     if options is None:
         options = {}
+        
+    cleanup_stray_temp_folders(save_folder)
+    cleanup_stray_temp_folders(DEFAULT_DOWNLOAD_FOLDER)
     
     # 1. Nếu là link danh sách phát và tải nhanh, phân tích danh sách phát trước
     resolved_links = []
@@ -1465,6 +1483,9 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
             PROGRESS_STATE["status"] = "failed"
             PROGRESS_STATE["error"] = str(error)
             PROGRESS_STATE["message"] = "Quá trình tải song song gặp lỗi."
+    finally:
+        cleanup_stray_temp_folders(save_folder)
+        cleanup_stray_temp_folders(DEFAULT_DOWNLOAD_FOLDER)
 
 
 @app.route("/api/progress", methods=["GET"])

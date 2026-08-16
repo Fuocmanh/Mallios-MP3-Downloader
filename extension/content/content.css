@@ -451,6 +451,117 @@
   background: #c2c7e0 !important;
 }
 
+/* THANH ÂM LƯỢNG NGHE THỬ */
+.yt-volume-box {
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  flex: 0 0 auto !important;
+}
+
+.yt-volume-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #8e9099 !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+.yt-volume-btn:hover { color: #a8c7fa !important; }
+
+.yt-volume-slider {
+  width: 36px !important;
+  height: 3px !important;
+  accent-color: #a8c7fa !important;
+  cursor: pointer !important;
+}
+
+/* Ô TÌM KIẾM LỌC PLAYLIST */
+.yt-search-filter-box {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: #282930 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  padding: 4px 8px !important;
+  margin-top: 6px !important;
+  margin-bottom: 6px !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+.yt-search-filter-input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  color: #e2e2e9 !important;
+  font-size: 11px !important;
+  outline: none !important;
+}
+
+/* HUY HIỆU ĐÃ CÓ TRÊN MÁY */
+.yt-badge-downloaded {
+  background: rgba(194, 239, 179, 0.2) !important;
+  color: #c2efb3 !important;
+  border: 1px solid rgba(194, 239, 179, 0.4) !important;
+  font-size: 9px !important;
+  font-weight: bold !important;
+  padding: 1px 5px !important;
+  border-radius: 4px !important;
+  flex: 0 0 auto !important;
+  margin-left: 4px !important;
+}
+
+/* NÚT QR CODE & MODAL */
+.yt-qr-btn {
+  background: #282930 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #a8c7fa !important;
+  font-size: 9.5px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  transition: all 0.15s ease !important;
+  flex: 0 0 auto !important;
+}
+.yt-qr-btn:hover {
+  background: #3c3d45 !important;
+  border-color: #a8c7fa !important;
+  transform: scale(1.05) !important;
+}
+
+.yt-qr-modal {
+  position: fixed !important;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(3px) !important;
+  z-index: 10000005 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.yt-qr-card {
+  background: #1e1f29 !important;
+  border: 1px solid rgba(168, 199, 250, 0.4) !important;
+  border-radius: 16px !important;
+  padding: 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 8px !important;
+  max-width: 250px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+  text-align: center !important;
+}
+
 .yt-preview-time {
   font-size: 10px !important;
   color: #8e9099 !important;

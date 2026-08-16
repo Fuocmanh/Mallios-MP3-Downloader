@@ -29,6 +29,11 @@ if "%NEED_SETUP%"=="1" (
     echo.
 )
 
+rem Tu dong kiem tra va cap nhat yt-dlp trong nen
+if exist "tools\yt-dlp.exe" (
+    start /b "" "tools\yt-dlp.exe" -U --no-check-certificate >nul 2>&1
+)
+
 echo ======================================================
 echo   MAY CHU DANG CHAY TAI: http://127.0.0.1:37491
 echo   (Vui long de cua so nay mo khi su dung Extension)

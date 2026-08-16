@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import subprocess
 import tempfile
 import threading
@@ -933,11 +934,19 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         return
     
     # Quét danh sách file trước khi tải
+    effective_save_folder = save_folder
+    temp_drive_dir = None
+    if save_target == "drive":
+        # Tạo thư mục tạm cô lập hoàn toàn cho Drive để không làm rác thư mục máy tính
+        temp_drive_dir = PROJECT_ROOT / "downloads" / ".temp_drive" / str(int(time.time())) / str(abs(hash(link)) % 10000000)
+        temp_drive_dir.mkdir(parents=True, exist_ok=True)
+        effective_save_folder = temp_drive_dir
+
     before_files = set()
     try:
         before_files = {
             str(p.resolve()) 
-            for p in list(save_folder.glob("*.mp3")) + list(save_folder.glob("*/*.mp3"))
+            for p in list(effective_save_folder.glob("*.mp3")) + list(effective_save_folder.glob("*/*.mp3"))
         }
     except Exception:
         pass
@@ -951,15 +960,17 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "-f", "ba[ext=m4a]/ba[ext=webm]/ba/best",
         "--extract-audio", "--audio-format", "mp3",
         "--audio-quality", quality,
+        "--embed-thumbnail",
+        "--add-metadata",
         "--ffmpeg-location", str(FFMPEG_PATH),
-        "--paths", str(save_folder),
+        "--paths", str(effective_save_folder),
         "--output", "%(uploader)s/%(title)s.%(ext)s",
         "--no-playlist",
         "--concurrent-fragments", "8",
         "--buffer-size", "128K",
         "--http-chunk-size", "10M",
         "--no-mtime",
-        "--postprocessor-args", "ffmpeg:-threads 0 -preset ultrafast"
+        "--postprocessor-args", "ffmpeg:-threads 0 -preset ultrafast -af loudnorm=I=-16:TP=-1.5:LRA=11"
     ]
     
     is_youtube = any(host in link.lower() for host in YOUTUBE_HOSTS)
@@ -1030,16 +1041,21 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                 percent_match = percent_regex.search(line_str)
                 if percent_match:
                     try:
-                        percent = float(percent_match.group(1))
+                        p_float = float(percent_match.group(1))
                         with PROGRESS_LOCK:
-                            PARALLEL_PROGRESS[state_key]["percent"] = min(percent, 98.0)
-                            PARALLEL_PROGRESS[state_key]["message"] = f"Đang tải ({percent}%)"
-                    except Exception:
+                            PARALLEL_PROGRESS[state_key]["started"] = True
+                            PARALLEL_PROGRESS[state_key]["status"] = "downloading"
+                            PARALLEL_PROGRESS[state_key]["percent"] = p_float
+                            PARALLEL_PROGRESS[state_key]["message"] = f"Đang tải... {p_float:.1f}%"
+                    except ValueError:
                         pass
-                elif "[ExtractAudio]" in line_str:
+
+                if "[ExtractAudio]" in line_str or "[ffmpeg]" in line_str or "[Metadata]" in line_str or "[ThumbnailsConvertor]" in line_str:
                     with PROGRESS_LOCK:
-                        PARALLEL_PROGRESS[state_key]["percent"] = 99.0
-                        PARALLEL_PROGRESS[state_key]["message"] = "Đang chuyển đổi MP3..."
+                        PARALLEL_PROGRESS[state_key]["started"] = True
+                        PARALLEL_PROGRESS[state_key]["status"] = "converting"
+                        PARALLEL_PROGRESS[state_key]["percent"] = 95.0
+                        PARALLEL_PROGRESS[state_key]["message"] = "Đang nhúng bìa & chuyển MP3..."
 
             stdout_rem, stderr_data = process.communicate()
             returncode = process.returncode
@@ -1084,8 +1100,8 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         if returncode in {0, 101}:
             try:
                 # Quét lại danh sách file sau khi tải xong (chỉ quét thư mục gốc và thư mục con cấp 1)
-                after_files = list(save_folder.glob("*.mp3")) + list(save_folder.glob("*/*.mp3"))
-                after_files.extend(list(save_folder.glob("*.webm")) + list(save_folder.glob("*/*.webm")))
+                after_files = list(effective_save_folder.glob("*.mp3")) + list(effective_save_folder.glob("*/*.mp3"))
+                after_files.extend(list(effective_save_folder.glob("*.webm")) + list(effective_save_folder.glob("*/*.webm")))
                 new_files = [p for p in after_files if str(p.resolve()) not in before_files]
                 
                 for original_file in new_files:
@@ -1106,7 +1122,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                         
                         # Chỉ đổi tên nếu thực sự có dấu cần xóa hoặc cần làm sạch tên
                         if original_file.name != clean_filename or original_parent.name != clean_parent_name:
-                            if original_parent != save_folder:
+                            if original_parent != effective_save_folder:
                                 clean_parent = original_parent.parent / clean_parent_name
                             else:
                                 clean_parent = original_parent
@@ -1192,7 +1208,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                             try:
                                 if final_file_path.is_file():
                                     final_file_path.unlink()
-                                if final_parent != save_folder and final_parent.is_dir() and not any(final_parent.iterdir()):
+                                if final_parent != effective_save_folder and final_parent.is_dir() and not any(final_parent.iterdir()):
                                     final_parent.rmdir()
                             except Exception:
                                 pass
@@ -1228,7 +1244,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                     else:
                         clean_err = stderr_data.strip().splitlines()[-1] if stderr_data.strip() else "Lỗi không xác định"
                 
-                PARALLEL_PROGRESS[state_key]["message"] = clean_err
+                PARALLEL_PROGRESS[state_key]["message"] = f"Lỗi: {clean_err}"
                 
                 error_msg = f"yt-dlp error code {returncode} for link {link}. Stderr: {stderr_data}"
                 with open(LOGS_DIR / "error.log", "a", encoding="utf-8") as f:
@@ -1240,6 +1256,12 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
             PARALLEL_PROGRESS[state_key]["percent"] = 0.0
             PARALLEL_PROGRESS[state_key]["message"] = str(e)
     finally:
+        # Luôn luôn dọn sạch thư mục tạm của Drive trong mọi trường hợp
+        if temp_drive_dir and temp_drive_dir.is_dir():
+            try:
+                shutil.rmtree(temp_drive_dir, ignore_errors=True)
+            except Exception:
+                pass
         with ACTIVE_PROCESSES_LOCK:
             if state_key in ACTIVE_PROCESSES:
                 del ACTIVE_PROCESSES[state_key]
@@ -1883,6 +1905,99 @@ def google_auth_logout():
     return response({"status": "success", "message": "Đã ngắt kết nối Google Drive."})
 
 
+def get_lan_ip() -> str:
+    """Lấy địa chỉ IP nội bộ của máy tính trong mạng Wi-Fi/LAN để phát nhạc sang điện thoại."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+@app.route("/api/local-ip", methods=["GET", "OPTIONS"])
+def get_local_ip():
+    if request.method == "OPTIONS":
+        return response({"status": "ok"})
+    return response({
+        "status": "success",
+        "ip": get_lan_ip(),
+        "port": 37491
+    })
+
+
+@app.route("/api/check-duplicates-batch", methods=["POST", "OPTIONS"])
+def check_duplicates_batch():
+    """Kiểm tra hàng loạt danh sách URL xem bài nào đã tồn tại trong thư mục lưu hoặc lịch sử."""
+    if request.method == "OPTIONS":
+        return response({"status": "ok"})
+    data = request.get_json(silent=True) or {}
+    urls = data.get("urls", [])
+    raw_folder = str(data.get("save_folder", "")).strip()
+    save_target = str(data.get("save_target", "local")).strip()
+
+    requested_folder = Path(raw_folder) if raw_folder else None
+    save_folder = requested_folder if requested_folder and requested_folder.is_dir() else DEFAULT_DOWNLOAD_FOLDER
+    history_records = load_history()
+    history_urls = {
+        item.get("url", "").split("&")[0].strip()
+        for item in history_records
+        if item.get("url")
+    }
+
+    results = {}
+    if save_target == "drive":
+        drive_history_urls = {
+            item.get("url", "").split("&")[0].strip()
+            for item in history_records
+            if item.get("storage_type") == "drive" and item.get("url")
+        }
+        for u in urls:
+            norm_u = u.split("&")[0].strip()
+            results[u] = norm_u in drive_history_urls
+        return response({"status": "success", "duplicates": results})
+
+    # Nếu lưu trên máy, kết hợp quét lịch sử và quét file thực tế trên ổ cứng
+    existing_files_normalized = set()
+    if save_folder and save_folder.is_dir():
+        try:
+            for p in list(save_folder.glob("*.mp3")) + list(save_folder.glob("*/*.mp3")):
+                norm_name = normalize_title_for_check(p.stem)
+                existing_files_normalized.add(norm_name)
+                if " - " in norm_name:
+                    existing_files_normalized.add(norm_name.split(" - ", 1)[1].strip())
+        except Exception:
+            pass
+
+    for u in urls:
+        norm_u = u.split("&")[0].strip()
+        is_dup = norm_u in history_urls
+        results[u] = is_dup
+
+    return response({"status": "success", "duplicates": results})
+
+
+def auto_update_ytdlp_background():
+    """Tự động kiểm tra và cập nhật yt-dlp lên bản mới nhất trong nền khi khởi động."""
+    try:
+        time.sleep(5)
+        if YTDLP_PATH.is_file():
+            subprocess.run(
+                [str(YTDLP_PATH), "-U", "--no-check-certificate"],
+                creationflags=CREATE_NO_WINDOW,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=45
+            )
+    except Exception:
+        pass
+
+threading.Thread(target=auto_update_ytdlp_background, daemon=True).start()
+
+
 if __name__ == "__main__":
     import traceback
     if sys.stdout is None:
@@ -1890,7 +2005,7 @@ if __name__ == "__main__":
     if sys.stderr is None:
         sys.stderr = open(LOGS_DIR / "error.log", "a", encoding="utf-8")
     try:
-        app.run(host="127.0.0.1", port=37491, threaded=True, use_reloader=False)
+        app.run(host="0.0.0.0", port=37491, threaded=True, use_reloader=False)
     except Exception as e:
         with open(LOGS_DIR / "error.log", "w", encoding="utf-8") as f:
             f.write(traceback.format_exc())

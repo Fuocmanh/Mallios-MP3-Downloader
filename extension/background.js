@@ -120,5 +120,66 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "show-notification") {
+    try {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/bear-icon.png",
+        title: message.title || "Mallios MP3 Downloader",
+        message: message.message || "Tải nhạc hoàn tất!",
+        priority: 2
+      });
+      sendResponse({ ok: true });
+    } catch (e) {
+      sendResponse({ ok: false, error: e.message });
+    }
+    return true;
+  }
+
   return false;
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  try {
+    chrome.contextMenus.create({
+      id: "mallios-download-context",
+      title: "⚡ Tải MP3 bằng Mallios",
+      contexts: ["link", "video", "audio", "page"]
+    });
+  } catch (_) {}
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === "mallios-download-context") {
+    const targetUrl = info.linkUrl || info.srcUrl || info.pageUrl || tab?.url;
+    if (!targetUrl) return;
+
+    try {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/bear-icon.png",
+        title: "⚡ Mallios MP3",
+        message: "Đang kết nối và tải âm thanh trong nền...",
+        priority: 1
+      });
+    } catch (_) {}
+
+    try {
+      const res = await proxyApiRequest("/download-parallel", {
+        method: "POST",
+        body: JSON.stringify({
+          urls: [targetUrl],
+          quality: "0",
+          save_folder: "",
+          save_target: "local"
+        })
+      });
+      const data = JSON.parse(res.body || "{}");
+      if (data.status === "success") {
+        console.log("[Mallios Context Menu] Đã gửi lệnh tải thành công:", targetUrl);
+      }
+    } catch (e) {
+      console.warn("[Mallios Context Menu] Lỗi gửi lệnh tải:", e);
+    }
+  }
 });

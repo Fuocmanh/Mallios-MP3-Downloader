@@ -1,22 +1,27 @@
-# Mallios MP3 Downloader (v3.4)
+# Mallios MP3 Downloader (v3.5)
 
 Mallios là tiện ích mở rộng Chrome chuyên nghiệp dành cho Windows, giúp tải âm thanh chất lượng cao từ YouTube, YouTube Music, SoundCloud... và chuyển đổi thành MP3 320kbps siêu tốc. 
 
-Hệ thống hoạt động với giao diện nút nổi thông minh trên trình duyệt kết hợp với máy chủ xử lý cục bộ Flask hiệu năng cao, hỗ trợ đồng bộ Google Drive và nghe thử nhạc tức thì.
+Hệ thống hoạt động với giao diện nút nổi thông minh trên trình duyệt kết hợp với máy chủ xử lý cục bộ Flask hiệu năng cao, hỗ trợ đồng bộ Google Drive, chia sẻ không dây sang điện thoại bằng mã QR và nghe thử nhạc tức thì.
 
 > **Tuyên bố trách nhiệm:** Chỉ tải nội dung khi bạn có quyền tải, sử dụng hoặc lưu trữ nội dung đó. Bạn chịu trách nhiệm tuân thủ điều khoản dịch vụ của nền tảng nguồn và pháp luật hiện hành.
 
 ---
 
-## ⭐ Tính năng nổi bật
+## ⭐ Tính năng nổi bật (v3.5)
 
 - **Quét Playlist Tức Thì (0.001s):** Đọc trực tiếp danh sách bài hát từ bộ nhớ DOM của YouTube/YouTube Music trong chớp mắt mà không cần chờ nạp mạng.
+- **🔍 Tìm Kiếm & Lọc Playlist Tức Thì:** Ô tìm kiếm thời gian thực giúp lọc nhanh bài hát theo tên hoặc nghệ sĩ, cùng nút chọn tất cả bài đang hiển thị.
 - **Nghe Thử Nhạc Trực Tiếp (Direct 302 CDN Stream):** Chuyển hướng trực tiếp đến CDN tốc độ cao của Google, hỗ trợ phát âm thanh HTML5 và tua nhạc tùy thích không độ trễ.
-- **Bộ nhớ RAM Cache Stream:** Lưu trữ luồng nghe thử vào bộ nhớ RAM, phát lại tức thì trong **0.01 giây**.
-- **Tải Đa Luồng Song Song:** Tải đồng thời tối đa 5 bài hát với 8 luồng kết nối mỗi bài, hoàn tất chỉ trong vài giây.
-- **Đồng Bộ Google Drive:** Tự động tải nhạc trực tiếp lên tài khoản Google Drive cá nhân qua OAuth 2.0.
-- **Lọc Đoạn Thừa (SponsorBlock):** Tự động cắt bỏ các đoạn quảng cáo, intro, outro và nhạc nền thừa của video YouTube.
-- **Chuẩn Hóa Tên Tệp & Chống Trùng Lặp:** Tự động tạo thư mục `Nghệ Sĩ/Tên Bài.mp3`, xóa dấu tiếng Việt, loại bỏ ký tự cấm Windows và tự động bỏ qua nếu bài hát đã có trên ổ cứng.
+- **🔁 Trình Phát Liên Tục & Điều Khiển Toàn Diện:** Tự động phát bài tiếp theo (Auto-play), cụm nút tua/chuyển bài ⏮/⏭, thanh chỉnh âm lượng 🔊 độc lập và hỗ trợ phím tắt (`Space`, `←`, `→`, `N`, `P`).
+- **📱 Quét Mã QR Nghe / Tải Trên Điện Thoại:** Chia sẻ bài hát trực tiếp sang điện thoại cùng mạng Wi-Fi thông qua mã QR Code cục bộ không cần cắm dây cáp.
+- **🖱️ Tải Siêu Tốc Bằng Chuột Phải (Context Menu):** Click chuột phải vào bất kỳ link video nào trên web ➔ Chọn `⚡ Tải MP3 bằng Mallios` để tải ngầm trong nền.
+- **🎚️ Chuẩn Hóa Âm Lượng Đồng Đều (EBU R128):** Tích hợp bộ lọc âm thanh `loudnorm` giúp toàn bộ bài hát xuất ra có mức âm lượng chuẩn cân bằng 100%.
+- **🖼️ Tự Động Nhúng Ảnh Bìa & Thẻ ID3 Metadata:** Tự động nhúng Thumbnail độ nét cao và thẻ ID3 (Tên bài, Ca sĩ, Album) vào file MP3.
+- **✅ Huy Hiệu "Đã Có Trên Máy":** Tự động nhận diện bài hát đã tải và gắn huy hiệu màu xanh trong danh sách phát để tránh tải trùng.
+- **🔔 Thông Báo Màn Hình Windows:** Gửi thông báo Toast khi hoàn tất tải nhạc.
+- **☁️ Đồng Bộ & Dọn Dẹp Hoàn Toàn Google Drive:** Tự động upload lên Drive và cô lập dọn dẹp 100% file tạm trên máy tính.
+- **🔄 Tự Động Cập Nhật `yt-dlp` Ngầm:** Tự động kiểm tra và nâng cấp bộ máy `yt-dlp.exe` lên phiên bản mới nhất khi khởi động.
 - **Khởi Động 1-Click Thông Minh (All-In-One):** Tệp `run.bat` tự động phát hiện, tải công cụ còn thiếu (`yt-dlp`, `ffmpeg`), cài đặt thư viện Python và bật máy chủ chỉ với 1 cú click chuột.
 
 ---
@@ -58,40 +63,39 @@ Mallios/
 │   ├── history.example.json   (Bản mẫu lịch sử rỗng)
 │   └── cookies.txt            (Tùy chọn: Cookie xác thực YouTube)
 │
-├── logs/                      📁 Nhật ký hệ thống
-│   ├── error.log              (Ghi nhận lỗi tải & chuyển đổi)
-│   └── startup.log            (Ghi nhận tiến trình khởi động)
+├── backend/                   📁 Mã nguồn Python Flask API
+│   ├── app.py                 (API xử lý chính, tải đa luồng, stream CDN 302, dọn dẹp Drive)
+│   └── drive_service.py       (Dịch vụ tích hợp Google Drive OAuth 2.0 & Webhook)
 │
-├── downloads/                 📁 Thư mục lưu nhạc MP3 tải về mặc định
-├── backend/                   📁 Mã nguồn API Flask, xử lý tải nhạc & Google Drive
-├── extension/                 📁 Tiện ích Chrome Manifest V3 và giao diện UI
-├── native-host/               📁 C# Native Messaging Host kết nối Extension và Server
-├── scripts/                   📁 Bộ script cài đặt, biên dịch tự động
-├── tools/                     📁 Chứa công cụ yt-dlp.exe, ffmpeg.exe (tự động tải)
+├── extension/                 📁 Tiện ích mở rộng Google Chrome (Manifest V3)
+│   ├── manifest.json          (Cấu hình quyền, host permissions, context menus, notifications)
+│   ├── background.js          (Service worker, quản lý kết nối native host & menu chuột phải)
+│   ├── content/
+│   │   ├── content.js         (Giao diện nút nổi, trích xuất DOM, trình phát âm thanh, QR code modal)
+│   │   └── content.css        (Giao diện Dark Theme hiện đại, thanh volume, huy hiệu)
+│   └── icons/                 (Biểu tượng ứng dụng)
 │
-├── run.bat                    🚀 Bộ khởi động thông minh All-In-One
-├── install.bat                🛠️ Script cài đặt độc lập (nếu cần)
-├── build.bat                  🔨 Biên dịch Native Host từ mã nguồn C#
-├── requirements.txt           📦 Danh sách thư viện Python
-├── README.md                  📖 Tài liệu giới thiệu dự án
-└── FEATURES.md                ⭐ Chi tiết toàn bộ tính năng
+├── native-host/               📁 Cầu nối Native Messaging Host cho Windows
+│   ├── MalliosNativeHost.cs   (Mã nguồn C# .NET siêu nhẹ tự động bật server nền)
+│   ├── install_host.bat       (Tự động biên dịch & đăng ký Registry Windows)
+│   └── uninstall_host.bat     (Gỡ cài đặt Native Host)
+│
+├── scripts/                   📁 Tập lệnh tự động hóa cài đặt & kiểm thử
+│   ├── setup-project.ps1      (Tự động tải yt-dlp, ffmpeg và cài đặt Python dependencies)
+│   ├── convert_cookies.py     (Chuyển đổi cookie Netscape sang JSON)
+│   └── test_*.py              (Bộ kiểm thử hiệu năng & chức năng)
+│
+├── tools/                     📁 Công cụ nhị phân (được run.bat tự động tải)
+│   ├── yt-dlp.exe             (Bộ máy phân tích và trích xuất luồng media)
+│   └── ffmpeg.exe             (Bộ mã hóa âm thanh sang MP3 chất lượng cao & loudnorm)
+│
+├── run.bat                    🚀 Khởi động hệ thống 1-click (Auto-setup + Auto-update)
+├── README.md                  📖 Hướng dẫn cài đặt và sử dụng
+└── FEATURES.md                🌟 Chi tiết toàn diện các tính năng kỹ thuật
 ```
 
 ---
 
-## 🔒 Bảo mật & Dữ liệu riêng tư
+## 📜 Giấy phép
 
-- **Không chia sẻ thông tin nhạy cảm:** File `.gitignore` đã được cấu hình mặc định để **không bao giờ đẩy các file chứa token cá nhân** (`drive_auth.json`, `drive_config.json`, `cookies.txt`, `history.json`, `logs/`) lên Git.
-- **Bảo vệ API Cục Bộ:** Máy chủ Flask chỉ lắng nghe duy nhất tại địa chỉ nội bộ `127.0.0.1:37491`, chặn toàn bộ các truy cập từ mạng bên ngoài.
-
----
-
-## 🛠️ Khắc phục sự cố thường gặp
-
-1. **Không kết nối được máy chủ:**
-   * Hãy kiểm tra xem cửa sổ `run.bat` có đang mở không.
-   * Nếu extension báo mất kết nối, hãy bấm nút Reload (Tải lại 🔄) tiện ích trong `chrome://extensions`.
-2. **Không nghe thử được hoặc tải bị lỗi bản quyền:**
-   * Hãy thử với video khác, hoặc xuất file `cookies.txt` từ trình duyệt đặt vào thư mục `configs/cookies.txt` để hỗ trợ các video giới hạn độ tuổi.
-3. **Thư mục tải về không đúng vị trí:**
-   * Nếu đường dẫn thư mục tùy chỉnh của bạn bị xóa hoặc không tồn tại, Mallios sẽ tự động lưu vào thư mục `Downloads` mặc định của Windows.
+Dự án được phân phối dưới giấy phép mã nguồn mở MIT.

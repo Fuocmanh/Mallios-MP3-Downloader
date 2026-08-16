@@ -1811,9 +1811,9 @@ def get_direct_stream_url(video_url: str) -> str:
         env["LANG"] = "en_US.UTF-8"
         
         candidates = [
-            ["-g", "-f", "ba/b/best", "--no-playlist", "--no-warnings", video_url],
+            ["-g", "-f", "ba/18/b", "--extractor-args", "youtube:player_client=android", "--no-playlist", "--no-warnings", video_url],
             ["-g", "-f", "ba/18/b", "--extractor-args", "youtube:player_client=ios,mweb", "--no-playlist", "--no-warnings", video_url],
-            ["-g", "-f", "ba/18/b", "--extractor-args", "youtube:player_client=android", "--no-playlist", "--no-warnings", video_url]
+            ["-g", "-f", "ba/b/best", "--no-playlist", "--no-warnings", video_url]
         ]
 
         for base_cmd in candidates:

@@ -1730,41 +1730,20 @@ function getFileListOutput() {
         });
       }
 
-      if (videoId) {
-        // Mode 1: Phát trực tiếp qua YouTube Embedded Player (100% mượt mà, không bị bot block)
-        activePlayerMode = 'iframe';
-        if (previewAudio) {
-          previewAudio.pause();
-          previewAudio.src = '';
+      activePlayerMode = 'audio';
+      const iframe = document.getElementById('yt-preview-hidden-iframe');
+      if (iframe) iframe.src = '';
+
+      if (previewAudio) {
+        const volSlider = document.getElementById('yt-preview-vol-slider');
+        if (volSlider) {
+          previewAudio.volume = parseFloat(volSlider.value) || 1;
         }
-
-        const iframe = getOrCreatePreviewIframe();
-        iframeDuration = 0;
-        iframeCurrentTime = 0;
-        iframeIsPlaying = shouldPlay;
-
-        const origin = encodeURIComponent(window.location.origin);
-        iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&autoplay=1&origin=${origin}`;
-
-        // Cài đặt âm lượng từ thanh volume
-        setTimeout(() => {
-          const volSlider = document.getElementById('yt-preview-vol-slider');
-          const vol = volSlider ? parseFloat(volSlider.value) : 1;
-          sendIframeCommand('setVolume', [Math.round(vol * 100)]);
-          if (shouldPlay) sendIframeCommand('playVideo');
-        }, 300);
-
-      } else {
-        // Mode 2: Fallback qua API máy chủ cho SoundCloud / URL khác
-        activePlayerMode = 'audio';
-        const iframe = document.getElementById('yt-preview-hidden-iframe');
-        if (iframe) iframe.src = '';
-
         previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
         previewAudio.load();
         if (shouldPlay) {
           previewAudio.play().catch(err => {
-            console.log("Đang tải luồng âm thanh...", err);
+            console.log("Đang nạp luồng âm thanh nghe thử...", err);
           });
         }
       }
@@ -1863,6 +1842,20 @@ function getFileListOutput() {
     }
 
     if (previewAudio) {
+      previewAudio.addEventListener('waiting', () => {
+        if (activePlayerMode === 'audio') {
+          previewToggleBtn.innerHTML = '⏳';
+          updateItemPlayBtns('⏳');
+        }
+      });
+
+      previewAudio.addEventListener('canplay', () => {
+        if (activePlayerMode === 'audio' && !previewAudio.paused) {
+          previewToggleBtn.innerHTML = '⏸';
+          updateItemPlayBtns('⏸');
+        }
+      });
+
       previewAudio.addEventListener('playing', () => {
         if (activePlayerMode === 'audio') {
           previewToggleBtn.innerHTML = '⏸';

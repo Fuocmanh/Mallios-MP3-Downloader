@@ -96,6 +96,8 @@ def apply_cors_headers(res):
         res.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
         res.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         res.headers["Access-Control-Allow-Private-Network"] = "true"
+        res.headers["Connection"] = "keep-alive"
+        res.headers["Keep-Alive"] = "timeout=60, max=1000"
         res.headers["Vary"] = "Origin"
     return res
 
@@ -776,6 +778,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     enable_sponsorblock = bool(options.get("enable_sponsorblock", False))
     embed_thumbnail = bool(options.get("embed_thumbnail", False))
     no_subfolder = bool(options.get("no_subfolder", False))
+    skip_metadata = bool(options.get("skip_metadata", False))
     
     if CANCEL_REQUESTED:
         with PROGRESS_LOCK:
@@ -841,7 +844,6 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "-f", "ba/18/b/best",
         "--extract-audio", "--audio-format", "mp3",
         "--audio-quality", quality,
-        "--add-metadata",
         "--ffmpeg-location", str(FFMPEG_PATH),
         "--paths", f"temp:{temp_dl_dir}",
         "--paths", f"home:{effective_save_folder}",
@@ -857,6 +859,9 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "--fragment-retries", "3",
         "--postprocessor-args", postprocessor_args
     ]
+    
+    if not skip_metadata:
+        arguments.append("--add-metadata")
     
     if embed_thumbnail:
         arguments.append("--embed-thumbnail")
@@ -1448,7 +1453,8 @@ def download():
         "enable_loudnorm": bool(data.get("enable_loudnorm", False)),
         "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
         "embed_thumbnail": bool(data.get("embed_thumbnail", False)),
-        "no_subfolder": bool(data.get("no_subfolder", False))
+        "no_subfolder": bool(data.get("no_subfolder", False)),
+        "skip_metadata": bool(data.get("skip_metadata", False))
     }
 
     try:
@@ -1503,7 +1509,8 @@ def retry_failed():
         "enable_loudnorm": bool(data.get("enable_loudnorm", False)),
         "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
         "embed_thumbnail": bool(data.get("embed_thumbnail", False)),
-        "no_subfolder": bool(data.get("no_subfolder", False))
+        "no_subfolder": bool(data.get("no_subfolder", False)),
+        "skip_metadata": bool(data.get("skip_metadata", False))
     }
     
     # Khởi động tải song song cho các link bị lỗi

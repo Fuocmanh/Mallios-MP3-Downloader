@@ -261,6 +261,10 @@
                 <input type="checkbox" id="yt-opt-thumbnail">
                 <span>🖼️ Nhúng ảnh bìa vào MP3</span>
               </label>
+              <label class="yt-checkbox-label" title="Tối ưu tốc độ tải cực hạn bằng cách bỏ qua bước chèn thẻ metadata ID3">
+                <input type="checkbox" id="yt-opt-fast-mode">
+                <span>⚡ Tải siêu tốc (Bỏ qua Metadata ID3)</span>
+              </label>
             </div>
           </div>
         </div>
@@ -309,6 +313,7 @@
     const optLoudnorm = document.getElementById('yt-opt-loudnorm');
     const optSponsorBlock = document.getElementById('yt-opt-sponsorblock');
     const optThumbnail = document.getElementById('yt-opt-thumbnail');
+    const optFastMode = document.getElementById('yt-opt-fast-mode');
     const qualitySelect = document.getElementById('yt-quality-select');
     let currentStorageTarget = localStorage.getItem('yt_mp3_storage_target') || 'local';
 
@@ -332,7 +337,8 @@
         yt_opt_no_subfolder: optNoSubfolder ? optNoSubfolder.checked : false,
         yt_opt_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         yt_opt_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
-        yt_opt_thumbnail: optThumbnail ? optThumbnail.checked : false
+        yt_opt_thumbnail: optThumbnail ? optThumbnail.checked : false,
+        yt_opt_fast_mode: optFastMode ? optFastMode.checked : false
       };
       for (const [key, val] of Object.entries(settings)) {
         localStorage.setItem(key, typeof val === 'boolean' ? (val ? 'true' : 'false') : val);
@@ -375,6 +381,10 @@
       optThumbnail.checked = localStorage.getItem('yt_opt_thumbnail') === 'true';
       optThumbnail.addEventListener('change', () => syncSettingsToStorage());
     }
+    if (optFastMode) {
+      optFastMode.checked = localStorage.getItem('yt_opt_fast_mode') === 'true';
+      optFastMode.addEventListener('change', () => syncSettingsToStorage());
+    }
 
     // Tự động đồng bộ các thiết lập lên chrome.storage khi khởi chạy
     syncSettingsToStorage();
@@ -384,7 +394,8 @@
         no_subfolder: optNoSubfolder ? optNoSubfolder.checked : false,
         enable_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         enable_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
-        embed_thumbnail: optThumbnail ? optThumbnail.checked : false
+        embed_thumbnail: optThumbnail ? optThumbnail.checked : false,
+        skip_metadata: optFastMode ? optFastMode.checked : false
       };
     }
 
@@ -1400,11 +1411,94 @@ function getFileListOutput() {
       }, btn, originalContent);
     });
 
-    function extractPlaylistFromPageDOM() {
+    function extractFromYtInitialData() {
       const items = [];
       const seenIds = new Set();
 
-      // 1. Panel danh sách phát trên trang xem video (Mix, Radio, Danh sách phát đang nghe, Sidebar)
+      function addItem(videoId, title) {
+        if (videoId && title && !seenIds.has(videoId)) {
+          seenIds.add(videoId);
+          items.push({
+            id: videoId,
+            title: title.trim(),
+            url: `https://www.youtube.com/watch?v=${videoId}`
+          });
+        }
+      }
+
+      function parseRenderer(r) {
+        if (!r) return;
+        const v = r.playlistPanelVideoRenderer || r.playlistVideoRenderer || r.compactVideoRenderer || r.videoRenderer || r.gridVideoRenderer || r.musicResponsiveListItemRenderer;
+        if (!v) return;
+        const vId = v.videoId;
+        let title = '';
+        if (v.title) {
+          if (typeof v.title.simpleText === 'string') {
+            title = v.title.simpleText;
+          } else if (Array.isArray(v.title.runs) && v.title.runs.length > 0) {
+            title = v.title.runs.map(x => x.text).join('');
+          }
+        }
+        if (!title && v.headline) {
+          title = v.headline.simpleText || (v.headline.runs ? v.headline.runs.map(x => x.text).join('') : '');
+        }
+        if (vId && title) {
+          addItem(vId, title);
+        }
+      }
+
+      function traverseObject(obj, depth = 0) {
+        if (!obj || depth > 10 || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) {
+          for (const it of obj) {
+            parseRenderer(it);
+            traverseObject(it, depth + 1);
+          }
+          return;
+        }
+        if (obj.videoId && (obj.title || obj.headline)) {
+          parseRenderer({ videoRenderer: obj });
+        }
+        for (const k of Object.keys(obj)) {
+          if (['playlistPanelVideoRenderer', 'playlistVideoRenderer', 'compactVideoRenderer', 'videoRenderer', 'gridVideoRenderer', 'musicResponsiveListItemRenderer'].includes(k)) {
+            parseRenderer(obj);
+          } else if (typeof obj[k] === 'object' && obj[k] !== null) {
+            traverseObject(obj[k], depth + 1);
+          }
+        }
+      }
+
+      try {
+        const scripts = document.querySelectorAll('script');
+        for (const s of scripts) {
+          const txt = s.textContent || '';
+          if (txt.includes('ytInitialData') && (txt.includes('var ytInitialData =') || txt.includes('window["ytInitialData"] =') || txt.includes('ytInitialData ='))) {
+            const jsonMatch = txt.match(/ytInitialData\s*=\s*({.+?});/s) || txt.match(/ytInitialData\s*=\s*({.+})/s);
+            if (jsonMatch && jsonMatch[1]) {
+              try {
+                const data = JSON.parse(jsonMatch[1]);
+                traverseObject(data);
+                if (items.length > 0) return items;
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+
+      return items;
+    }
+
+    function extractPlaylistFromPageDOM() {
+      // 1. Ưu tiên trích xuất trực tiếp siêu tốc từ ytInitialData (0.001 giây)
+      const ytDataItems = extractFromYtInitialData();
+      if (ytDataItems && ytDataItems.length > 0) {
+        return ytDataItems;
+      }
+
+      const items = [];
+      const seenIds = new Set();
+
+      // 2. Panel danh sách phát trên trang xem video (Mix, Radio, Danh sách phát đang nghe, Sidebar)
       const panelItems = document.querySelectorAll('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer, ytd-rich-item-renderer, ytd-video-renderer');
       panelItems.forEach(el => {
         const titleEl = el.querySelector('#video-title, #title, span.ytd-playlist-panel-video-renderer, #video-title-link');
@@ -1425,7 +1519,7 @@ function getFileListOutput() {
         }
       });
 
-      // 2. Trang danh sách phát YouTube Music
+      // 3. Trang danh sách phát YouTube Music
       if (items.length === 0) {
         const ytMusicItems = document.querySelectorAll('ytmusic-responsive-list-item-renderer, ytmusic-player-queue-item');
         ytMusicItems.forEach(el => {

@@ -47,6 +47,7 @@ LOGS_DIR.mkdir(exist_ok=True)
 TOOLS_DIR = PROJECT_ROOT / "tools"
 FFMPEG_PATH = TOOLS_DIR
 YTDLP_PATH = TOOLS_DIR / "yt-dlp.exe"
+ARIA2C_PATH = TOOLS_DIR / "aria2c.exe"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 VALID_QUALITIES = {"0", "2", "5"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
@@ -983,12 +984,22 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "--paths", f"home:{effective_save_folder}",
         "--output", "%(uploader)s/%(title)s.%(ext)s",
         "--no-playlist",
-        "--concurrent-fragments", "8",
+        "--concurrent-fragments", "10",
         "--buffer-size", "128K",
         "--http-chunk-size", "10M",
         "--no-mtime",
+        "--force-ipv4",
+        "--socket-timeout", "5",
+        "--file-access-retries", "3",
+        "--fragment-retries", "3",
         "--postprocessor-args", postprocessor_args
     ]
+    
+    if ARIA2C_PATH.is_file():
+        arguments.extend([
+            "--downloader", "aria2c",
+            "--downloader-args", "aria2c:-x 16 -s 16 -j 16 -k 1M --continue=true"
+        ])
     
     if embed_thumbnail:
         arguments.append("--embed-thumbnail")
@@ -996,7 +1007,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     is_youtube = any(host in link.lower() for host in YOUTUBE_HOSTS)
     if is_youtube:
         arguments.extend([
-            "--extractor-args", "youtube:player_client=android,web"
+            "--extractor-args", "youtube:player_client=ios,tv,web_creator,default"
         ])
         if enable_sponsorblock:
             arguments.extend([

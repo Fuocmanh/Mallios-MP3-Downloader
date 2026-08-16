@@ -531,7 +531,7 @@ def upload_bytes_to_drive(
     if not upload_location:
         raise RuntimeError("Không lấy được URL khởi tạo Resumable Upload từ Google Drive.")
 
-    chunk_size = 2 * 1024 * 1024
+    chunk_size = 10 * 1024 * 1024
     bytes_sent = 0
     while bytes_sent < total_size:
         chunk = file_bytes[bytes_sent:bytes_sent + chunk_size]
@@ -647,7 +647,7 @@ def upload_mp3_to_drive(
         raise RuntimeError("Không lấy được URL khởi tạo Resumable Upload từ Google Drive.")
 
     total_size = file_path.stat().st_size
-    chunk_size = 2 * 1024 * 1024
+    chunk_size = 10 * 1024 * 1024
 
     with open(file_path, "rb") as f:
         bytes_sent = 0

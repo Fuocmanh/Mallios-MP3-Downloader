@@ -524,7 +524,7 @@ def get_playlist():
         return response({"status": "error", "message": "Đường dẫn không hợp lệ."}, 400)
 
     try:
-        args = ["--dump-single-json", "--extractor-args", "youtube:player_client=android,web,tv"]
+        args = ["--dump-single-json", "--extractor-args", "youtube:player_client=android,web"]
         if "list=" in url:
             args.append("--flat-playlist")
         else:
@@ -577,7 +577,7 @@ def extract_playlist_links(playlist_url: str, max_files: int = 0) -> list[str]:
     # Phân tích danh sách phát để lấy danh sách URL video con
     base_arguments = [
         "--flat-playlist", "--dump-single-json",
-        "--extractor-args", "youtube:player_client=android,web,tv",
+        "--extractor-args", "youtube:player_client=android,web",
         playlist_url
     ]
     arguments = add_cookie_args(base_arguments)
@@ -957,7 +957,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
 
     arguments = [
         "--encoding", "utf-8",
-        "-f", "ba[ext=m4a]/ba[ext=webm]/ba/best",
+        "-f", "ba[ext=m4a]/ba[ext=webm]/ba/18/b/best",
         "--extract-audio", "--audio-format", "mp3",
         "--audio-quality", quality,
         "--embed-thumbnail",
@@ -977,7 +977,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     if is_youtube:
         arguments.extend([
             "--sponsorblock-remove", "music_offtopic,sponsor,selfpromo,intro,outro",
-            "--extractor-args", "youtube:player_client=android,web,tv"
+            "--extractor-args", "youtube:player_client=android,web"
         ])
         
     base_download_args = [*arguments, link]
@@ -993,7 +993,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         # Tối đa 2 lượt cho cùng một bài:
         # lượt 1 dùng cookie hiện tại;
         # nếu lỗi xác thực -> refresh browser cookie -> thử lại ngay.
-        # Nếu không có browser -> thử không cookie.
+        # Nếu lỗi rate-limit -> chuyển sang client android độc lập.
         retried_auth = False
 
         while True:
@@ -1065,33 +1065,54 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
 
             combined_output = f"{stdout_rem}\n{stderr_data}"
 
-            if (
-                returncode != 0
-                and not retried_auth
-                and is_cookie_auth_error(combined_output)
-            ):
-                retried_auth = True
+            if returncode != 0 and not retried_auth:
+                if is_cookie_auth_error(combined_output):
+                    retried_auth = True
+                    if refresh_cookies_from_browser():
+                        arguments = [*base_download_args, "--cookies", str(PROJECT_ROOT / "cookies.txt")]
+                        with PROGRESS_LOCK:
+                            PARALLEL_PROGRESS[state_key]["started"] = False
+                            PARALLEL_PROGRESS[state_key]["percent"] = 0.0
+                            PARALLEL_PROGRESS[state_key]["status"] = "downloading"
+                            PARALLEL_PROGRESS[state_key]["message"] = "Cookie lỗi, đang làm mới cookie từ browser..."
+                        continue
 
-                if refresh_cookies_from_browser():
-                    arguments = [*base_download_args, "--cookies", str(PROJECT_ROOT / "cookies.txt")]
+                    # Không có browser -> thử đúng một lần không cookie.
+                    if "--cookies" in arguments:
+                        arguments = [
+                            arg for arg in arguments
+                            if arg != "--cookies" and arg != str(PROJECT_ROOT / "cookies.txt")
+                        ]
+                        with PROGRESS_LOCK:
+                            PARALLEL_PROGRESS[state_key]["started"] = False
+                            PARALLEL_PROGRESS[state_key]["percent"] = 0.0
+                            PARALLEL_PROGRESS[state_key]["status"] = "downloading"
+                            PARALLEL_PROGRESS[state_key]["message"] = "Không có browser, thử tải không cookie..."
+                        continue
+                elif any(phrase in combined_output for phrase in ["rate-limited", "This content isn't available", "Requested format"]):
+                    retried_auth = True
+                    # Chuyển sang client Android thuần túy để vượt qua YouTube Rate-Limit
+                    new_args = []
+                    skip_next = False
+                    for idx, arg in enumerate(arguments):
+                        if skip_next:
+                            skip_next = False
+                            continue
+                        if arg == "--extractor-args":
+                            skip_next = True
+                            continue
+                        if arg == "-f":
+                            new_args.extend(["-f", "18/b/ba/best"])
+                            skip_next = True
+                            continue
+                        new_args.append(arg)
+                    new_args.extend(["--extractor-args", "youtube:player_client=android"])
+                    arguments = new_args
                     with PROGRESS_LOCK:
                         PARALLEL_PROGRESS[state_key]["started"] = False
                         PARALLEL_PROGRESS[state_key]["percent"] = 0.0
                         PARALLEL_PROGRESS[state_key]["status"] = "downloading"
-                        PARALLEL_PROGRESS[state_key]["message"] = "Cookie lỗi, đang làm mới cookie từ browser..."
-                    continue
-
-                # Không có browser -> thử đúng một lần không cookie.
-                if "--cookies" in arguments:
-                    arguments = [
-                        arg for arg in arguments
-                        if arg != "--cookies" and arg != str(PROJECT_ROOT / "cookies.txt")
-                    ]
-                    with PROGRESS_LOCK:
-                        PARALLEL_PROGRESS[state_key]["started"] = False
-                        PARALLEL_PROGRESS[state_key]["percent"] = 0.0
-                        PARALLEL_PROGRESS[state_key]["status"] = "downloading"
-                        PARALLEL_PROGRESS[state_key]["message"] = "Không có browser, thử tải không cookie..."
+                        PARALLEL_PROGRESS[state_key]["message"] = "Đang đổi client vượt Rate-Limit YouTube..."
                     continue
 
             break
@@ -1100,8 +1121,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         if returncode in {0, 101}:
             try:
                 # Quét lại danh sách file sau khi tải xong (chỉ quét thư mục gốc và thư mục con cấp 1)
-                after_files = list(effective_save_folder.glob("*.mp3")) + list(effective_save_folder.glob("*/*.mp3"))
-                after_files.extend(list(effective_save_folder.glob("*.webm")) + list(effective_save_folder.glob("*/*.webm")))
+                after_files = list(effective_save_folder.glob("*.*")) + list(effective_save_folder.glob("*/*.*"))
                 new_files = [p for p in after_files if str(p.resolve()) not in before_files]
                 
                 for original_file in new_files:

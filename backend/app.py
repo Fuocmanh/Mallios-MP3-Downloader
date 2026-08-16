@@ -1503,6 +1503,7 @@ def get_progress():
 
 
 @app.route("/download", methods=["POST", "OPTIONS"])
+@app.route("/download-parallel", methods=["POST", "OPTIONS"])
 def download():
     if request.method == "OPTIONS":
         return response({})
@@ -1519,7 +1520,10 @@ def download():
         PROGRESS_STATE["error"] = ""
             
     data = request.get_json(silent=True) or {}
-    links = normalize_links(data.get("links", []))
+    raw_links = data.get("links", []) or data.get("urls", [])
+    if isinstance(raw_links, str):
+        raw_links = [raw_links]
+    links = normalize_links(raw_links)
     if not links:
         with PROGRESS_LOCK:
             PROGRESS_STATE["status"] = "failed"
@@ -1528,7 +1532,7 @@ def download():
             
         return response({"status": "error", "message": "Hãy chọn ít nhất một link YouTube hợp lệ."}, 400)
  
-    requested_path = str(data.get("download_path", "")).strip()
+    requested_path = str(data.get("download_path", "") or data.get("save_folder", "")).strip()
     save_target = str(data.get("save_target", "local")).strip().lower()
     if save_target != "drive":
         save_target = "local"

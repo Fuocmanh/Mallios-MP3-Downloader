@@ -146,10 +146,17 @@
                 <span class="yt-preview-anim-disc">🎵</span>
                 <span id="yt-preview-title" class="yt-preview-title">Đang phát bài hát...</span>
               </div>
-              <button type="button" id="yt-preview-close-btn" class="yt-preview-close-btn" title="Đóng nghe thử">✕</button>
+              <div style="display: flex; align-items: center; gap: 4px; flex: 0 0 auto;">
+                <button type="button" id="yt-preview-autoplay-btn" class="yt-preview-autoplay-btn active" title="Tự động phát bài tiếp theo (Đang Bật)">
+                  🔁 Tự phát
+                </button>
+                <button type="button" id="yt-preview-close-btn" class="yt-preview-close-btn" title="Đóng nghe thử">✕</button>
+              </div>
             </div>
             <div class="yt-preview-controls">
+              <button type="button" id="yt-preview-prev-btn" class="yt-preview-nav-btn" title="Bài trước (⏮)">⏮</button>
               <button type="button" id="yt-preview-toggle-btn" class="yt-preview-toggle-btn" title="Phát / Tạm dừng">▶</button>
+              <button type="button" id="yt-preview-next-btn" class="yt-preview-nav-btn" title="Bài tiếp theo (⏭)">⏭</button>
               <span id="yt-preview-current-time" class="yt-preview-time">00:00</span>
               <input type="range" id="yt-preview-seek-bar" class="yt-preview-seek-bar" min="0" max="100" value="0" step="0.1">
               <span id="yt-preview-total-time" class="yt-preview-time">00:00</span>
@@ -1221,12 +1228,18 @@ function doGet(e) {
     const previewTitle = document.getElementById('yt-preview-title');
     const previewAudio = document.getElementById('yt-preview-audio-element');
     const previewToggleBtn = document.getElementById('yt-preview-toggle-btn');
+    const previewPrevBtn = document.getElementById('yt-preview-prev-btn');
+    const previewNextBtn = document.getElementById('yt-preview-next-btn');
+    const previewAutoplayBtn = document.getElementById('yt-preview-autoplay-btn');
     const previewCloseBtn = document.getElementById('yt-preview-close-btn');
     const previewSeekBar = document.getElementById('yt-preview-seek-bar');
     const previewCurrentTime = document.getElementById('yt-preview-current-time');
     const previewTotalTime = document.getElementById('yt-preview-total-time');
 
+    let currentPlaylistItems = [];
+    let currentPreviewIndex = -1;
     let currentPreviewUrl = null;
+    let isAutoplayEnabled = true;
     let isUserSeeking = false;
 
     function formatTime(seconds) {
@@ -1241,7 +1254,7 @@ function doGet(e) {
         const parent = btn.closest('.yt-mp3-item');
         if (parent && parent.dataset.url === currentPreviewUrl) {
           btn.innerHTML = icon;
-          if (icon === '⏸') {
+          if (icon === '⏸' || icon === '⏳') {
             btn.classList.add('playing');
           } else {
             btn.classList.remove('playing');
@@ -1251,6 +1264,55 @@ function doGet(e) {
           btn.classList.remove('playing');
         }
       });
+
+      // Đánh dấu nổi bật bài hát đang nghe thử trong danh sách
+      document.querySelectorAll('.yt-mp3-item').forEach(itemDiv => {
+        if (itemDiv.dataset.url === currentPreviewUrl && currentPreviewUrl) {
+          itemDiv.classList.add('active-preview');
+        } else {
+          itemDiv.classList.remove('active-preview');
+        }
+      });
+    }
+
+    function startPreviewSongByIndex(index, shouldPlay = true) {
+      if (!currentPlaylistItems || currentPlaylistItems.length === 0) return;
+      if (index < 0) index = currentPlaylistItems.length - 1;
+      if (index >= currentPlaylistItems.length) index = 0;
+
+      currentPreviewIndex = index;
+      const item = currentPlaylistItems[index];
+      if (!item || !item.url) return;
+
+      currentPreviewUrl = item.url;
+      previewTitle.textContent = `${index + 1}. ${item.title}`;
+      if (previewBar) previewBar.style.display = 'flex';
+      previewCurrentTime.textContent = '00:00';
+      previewTotalTime.textContent = '...';
+      previewSeekBar.value = 0;
+      previewToggleBtn.innerHTML = '⏳';
+
+      updateItemPlayBtns('⏳');
+
+      // Tự động cuộn đến bài hát đang phát trong danh sách
+      const allItemDivs = document.querySelectorAll('.yt-mp3-item');
+      if (allItemDivs[index]) {
+        allItemDivs[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
+      previewAudio.load();
+      if (shouldPlay) {
+        previewAudio.play().catch(err => {
+          console.log("Đang tải luồng âm thanh...", err);
+        });
+      }
+
+      // Nạp trước bài tiếp theo trong nền để chuyển bài siêu mượt
+      const nextIdx = (index + 1) % currentPlaylistItems.length;
+      if (currentPlaylistItems[nextIdx] && currentPlaylistItems[nextIdx].url) {
+        fetch(`${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(currentPlaylistItems[nextIdx].url)}`).catch(() => {});
+      }
     }
 
     function togglePreviewSong(item, itemBtn) {
@@ -1263,23 +1325,31 @@ function doGet(e) {
         return;
       }
 
-      currentPreviewUrl = item.url;
-      previewTitle.textContent = item.title;
-      previewBar.style.display = 'flex';
-      previewCurrentTime.textContent = '00:00';
-      previewTotalTime.textContent = '...';
-      previewSeekBar.value = 0;
-      previewToggleBtn.innerHTML = '⏳';
+      const foundIdx = currentPlaylistItems.findIndex(x => x.url === item.url);
+      startPreviewSongByIndex(foundIdx >= 0 ? foundIdx : 0, true);
+    }
 
-      updateItemPlayBtns('▶');
-      itemBtn.innerHTML = '⏳';
-      itemBtn.classList.add('playing');
+    function playNextPreview(isAuto = false) {
+      if (!currentPlaylistItems || currentPlaylistItems.length === 0) return;
+      let nextIndex = currentPreviewIndex + 1;
+      if (nextIndex >= currentPlaylistItems.length) {
+        nextIndex = 0; // Tự động lặp lại từ bài đầu tiên
+      }
+      startPreviewSongByIndex(nextIndex, true);
+    }
 
-      previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
-      previewAudio.load();
-      previewAudio.play().catch(err => {
-        console.log("Đang tải luồng âm thanh...", err);
-      });
+    function playPrevPreview() {
+      if (!currentPlaylistItems || currentPlaylistItems.length === 0) return;
+      if (previewAudio && previewAudio.currentTime > 3) {
+        previewAudio.currentTime = 0;
+        previewAudio.play().catch(() => {});
+        return;
+      }
+      let prevIndex = currentPreviewIndex - 1;
+      if (prevIndex < 0) {
+        prevIndex = currentPlaylistItems.length - 1;
+      }
+      startPreviewSongByIndex(prevIndex, true);
     }
 
     if (previewAudio) {
@@ -1301,10 +1371,14 @@ function doGet(e) {
       });
 
       previewAudio.addEventListener('ended', () => {
-        previewToggleBtn.innerHTML = '▶';
-        updateItemPlayBtns('▶');
-        previewSeekBar.value = 0;
-        previewCurrentTime.textContent = '00:00';
+        if (isAutoplayEnabled && currentPlaylistItems.length > 0) {
+          playNextPreview(true);
+        } else {
+          previewToggleBtn.innerHTML = '▶';
+          updateItemPlayBtns('▶');
+          previewSeekBar.value = 0;
+          previewCurrentTime.textContent = '00:00';
+        }
       });
 
       previewAudio.addEventListener('timeupdate', () => {
@@ -1330,12 +1404,39 @@ function doGet(e) {
 
     if (previewToggleBtn) {
       previewToggleBtn.addEventListener('click', () => {
-        if (!currentPreviewUrl) return;
+        if (!currentPreviewUrl) {
+          if (currentPlaylistItems.length > 0) {
+            startPreviewSongByIndex(0, true);
+          }
+          return;
+        }
         if (previewAudio.paused) {
-          previewAudio.play();
+          previewAudio.play().catch(() => {});
         } else {
           previewAudio.pause();
         }
+      });
+    }
+
+    if (previewPrevBtn) {
+      previewPrevBtn.addEventListener('click', () => {
+        playPrevPreview();
+      });
+    }
+
+    if (previewNextBtn) {
+      previewNextBtn.addEventListener('click', () => {
+        playNextPreview(false);
+      });
+    }
+
+    if (previewAutoplayBtn) {
+      previewAutoplayBtn.addEventListener('click', () => {
+        isAutoplayEnabled = !isAutoplayEnabled;
+        previewAutoplayBtn.classList.toggle('active', isAutoplayEnabled);
+        previewAutoplayBtn.title = isAutoplayEnabled 
+          ? "Tự động phát bài tiếp theo (Đang Bật)" 
+          : "Tự động phát bài tiếp theo (Đang Tắt)";
       });
     }
 
@@ -1346,6 +1447,7 @@ function doGet(e) {
           previewAudio.src = '';
         }
         currentPreviewUrl = null;
+        currentPreviewIndex = -1;
         if (previewBar) previewBar.style.display = 'none';
         updateItemPlayBtns('▶');
       });
@@ -1388,9 +1490,17 @@ function doGet(e) {
         }
       });
 
+      currentPlaylistItems = uniqueItems;
+      if (currentPreviewUrl) {
+        currentPreviewIndex = currentPlaylistItems.findIndex(x => x.url === currentPreviewUrl);
+      }
+
       uniqueItems.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'yt-mp3-item';
+        if (item.url === currentPreviewUrl) {
+          div.classList.add('active-preview');
+        }
         div.dataset.url = item.url;
         div.dataset.title = item.title;
 
@@ -1402,7 +1512,7 @@ function doGet(e) {
         playBtn.type = 'button';
         playBtn.className = 'yt-item-play-btn';
         playBtn.title = 'Nghe thử bài này';
-        playBtn.innerHTML = '▶';
+        playBtn.innerHTML = (item.url === currentPreviewUrl && previewAudio && !previewAudio.paused) ? '⏸' : '▶';
 
         const span = document.createElement('span');
         span.className = 'yt-item-title';

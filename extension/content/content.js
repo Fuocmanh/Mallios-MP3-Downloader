@@ -120,6 +120,22 @@
               <option value="5">128 kbps (Tiết kiệm)</option>
             </select>
           </div>
+
+          <!-- TÙY CHỌN ÂM THANH & NÂNG CAO -->
+          <div class="yt-advanced-options-box">
+            <label class="yt-checkbox-label" title="Tự động cân bằng mức âm lượng giữa các bài theo chuẩn EBU R128 (Tốn thêm 2-3s CPU)">
+              <input type="checkbox" id="yt-opt-loudnorm">
+              <span>🎚️ Chuẩn hóa âm lượng (Loudnorm)</span>
+            </label>
+            <label class="yt-checkbox-label" title="Tự động cắt các đoạn quảng cáo, intro tài trợ do tác giả lồng vào video (SponsorBlock)">
+              <input type="checkbox" id="yt-opt-sponsorblock">
+              <span>🛑 Cắt intro / tài trợ (SponsorBlock)</span>
+            </label>
+            <label class="yt-checkbox-label" title="Nhúng ảnh bìa chất lượng cao vào bên trong file MP3">
+              <input type="checkbox" id="yt-opt-thumbnail">
+              <span>🖼️ Nhúng ảnh bìa vào MP3</span>
+            </label>
+          </div>
         </div>
 
         <div class="yt-mp3-tabs">
@@ -256,6 +272,31 @@
     const tabQuick = document.getElementById('yt-tab-quick');
     const tabSelect = document.getElementById('yt-tab-select');
     const tabHistory = document.getElementById('yt-tab-history');
+
+    const optLoudnorm = document.getElementById('yt-opt-loudnorm');
+    const optSponsorBlock = document.getElementById('yt-opt-sponsorblock');
+    const optThumbnail = document.getElementById('yt-opt-thumbnail');
+
+    if (optLoudnorm) {
+      optLoudnorm.checked = localStorage.getItem('yt_opt_loudnorm') === 'true';
+      optLoudnorm.addEventListener('change', () => localStorage.setItem('yt_opt_loudnorm', optLoudnorm.checked));
+    }
+    if (optSponsorBlock) {
+      optSponsorBlock.checked = localStorage.getItem('yt_opt_sponsorblock') === 'true';
+      optSponsorBlock.addEventListener('change', () => localStorage.setItem('yt_opt_sponsorblock', optSponsorBlock.checked));
+    }
+    if (optThumbnail) {
+      optThumbnail.checked = localStorage.getItem('yt_opt_thumbnail') === 'true';
+      optThumbnail.addEventListener('change', () => localStorage.setItem('yt_opt_thumbnail', optThumbnail.checked));
+    }
+
+    function getDownloadOptions() {
+      return {
+        enable_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
+        enable_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
+        embed_thumbnail: optThumbnail ? optThumbnail.checked : false
+      };
+    }
 
     const savedWidth = localStorage.getItem('yt-mp3-width');
     const savedHeight = localStorage.getItem('yt-mp3-height');
@@ -1160,7 +1201,8 @@ function doGet(e) {
         max_files: 1,
         quality: quality,
         download_path: savePath,
-        save_target: currentStorageTarget
+        save_target: currentStorageTarget,
+        ...getDownloadOptions()
       }, btn, originalContent);
     });
 
@@ -1713,7 +1755,8 @@ function doGet(e) {
         max_files: 0,
         quality: quality,
         download_path: savePath,
-        save_target: currentStorageTarget
+        save_target: currentStorageTarget,
+        ...getDownloadOptions()
       }, btn, originalContent);
     });
 

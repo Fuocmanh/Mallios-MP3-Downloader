@@ -906,8 +906,15 @@ def find_duplicate_fast(url: str, save_target: str, save_folder: Path) -> tuple[
     return False, None
 
 
-def run_single_download(link: str, quality: str, save_folder: Path, state_key: str, save_target: str = "local"):
+def run_single_download(link: str, quality: str, save_folder: Path, state_key: str, save_target: str = "local", options: dict = None):
     global PARALLEL_PROGRESS, MATCHING_DUPLICATE_FILES
+    temp_dl_dir = None
+    temp_drive_dir = None
+    if options is None:
+        options = {}
+    enable_loudnorm = bool(options.get("enable_loudnorm", False))
+    enable_sponsorblock = bool(options.get("enable_sponsorblock", False))
+    embed_thumbnail = bool(options.get("embed_thumbnail", False))
     
     if CANCEL_REQUESTED:
         with PROGRESS_LOCK:
@@ -957,6 +964,13 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     env["PYTHONIOENCODING"] = "utf-8"
     env["LANG"] = "en_US.UTF-8"
 
+    temp_dl_dir = effective_save_folder / f".temp_dl_{state_key}"
+    temp_dl_dir.mkdir(parents=True, exist_ok=True)
+
+    postprocessor_args = "ffmpeg:-threads 0 -preset ultrafast"
+    if enable_loudnorm:
+        postprocessor_args += " -af loudnorm=I=-16:TP=-1.5:LRA=11"
+
     arguments = [
         "--encoding", "utf-8",
         "-f", "ba[ext=m4a]/ba[ext=webm]/ba/18/b/best",
@@ -964,22 +978,29 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "--audio-quality", quality,
         "--add-metadata",
         "--ffmpeg-location", str(FFMPEG_PATH),
-        "--paths", str(effective_save_folder),
+        "--paths", f"temp:{temp_dl_dir}",
+        "--paths", f"home:{effective_save_folder}",
         "--output", "%(uploader)s/%(title)s.%(ext)s",
         "--no-playlist",
         "--concurrent-fragments", "8",
         "--buffer-size", "128K",
         "--http-chunk-size", "10M",
         "--no-mtime",
-        "--postprocessor-args", "ffmpeg:-threads 0 -preset ultrafast"
+        "--postprocessor-args", postprocessor_args
     ]
+    
+    if embed_thumbnail:
+        arguments.append("--embed-thumbnail")
     
     is_youtube = any(host in link.lower() for host in YOUTUBE_HOSTS)
     if is_youtube:
         arguments.extend([
-            "--sponsorblock-remove", "music_offtopic,sponsor,selfpromo,intro,outro",
             "--extractor-args", "youtube:player_client=android,web"
         ])
+        if enable_sponsorblock:
+            arguments.extend([
+                "--sponsorblock-remove", "music_offtopic,sponsor,selfpromo,intro,outro"
+            ])
         
     base_download_args = [*arguments, link]
     arguments = add_cookie_args(base_download_args)
@@ -1293,16 +1314,26 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                 shutil.rmtree(temp_drive_dir, ignore_errors=True)
             except Exception:
                 pass
+                
+        # Dọn sạch thư mục tạm của yt-dlp (chứa các file .part, .webm chưa hoàn thành)
+        if temp_dl_dir and temp_dl_dir.is_dir():
+            try:
+                shutil.rmtree(temp_dl_dir, ignore_errors=True)
+            except Exception:
+                pass
+                
         with ACTIVE_PROCESSES_LOCK:
             if state_key in ACTIVE_PROCESSES:
                 del ACTIVE_PROCESSES[state_key]
 
 
-def run_parallel_downloads_background(links: list[str], quality: str, save_folder: Path, max_files: int, save_target: str = "local"):
+def run_parallel_downloads_background(links: list[str], quality: str, save_folder: Path, max_files: int, save_target: str = "local", options: dict = None):
     global PROGRESS_STATE, PARALLEL_PROGRESS, CANCEL_REQUESTED, MATCHING_DUPLICATE_FILES
 
     CANCEL_REQUESTED = False
     MATCHING_DUPLICATE_FILES = []
+    if options is None:
+        options = {}
     
     # 1. Nếu là link danh sách phát và tải nhanh, phân tích danh sách phát trước
     resolved_links = []
@@ -1355,7 +1386,7 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
             futures = {}
             for idx, link in enumerate(resolved_links):
                 state_key = f"item_{idx}"
-                fut = executor.submit(run_single_download, link, quality, save_folder, state_key, save_target)
+                fut = executor.submit(run_single_download, link, quality, save_folder, state_key, save_target, options)
                 futures[fut] = state_key
                 
             while True:
@@ -1486,15 +1517,16 @@ def download():
     quality = str(data.get("quality", "0"))
     quality = quality if quality in VALID_QUALITIES else "0"
     max_files = data.get("max_files", 0)
-    try:
-        max_files = max(0, min(int(max_files), 100))
-    except (TypeError, ValueError):
-        max_files = 0
- 
+    download_options = {
+        "enable_loudnorm": bool(data.get("enable_loudnorm", False)),
+        "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
+        "embed_thumbnail": bool(data.get("embed_thumbnail", False))
+    }
+
     try:
         thread = threading.Thread(
             target=run_parallel_downloads_background,
-            args=(links, quality, save_folder, max_files, save_target)
+            args=(links, quality, save_folder, max_files, save_target, download_options)
         )
         thread.daemon = True
         thread.start()

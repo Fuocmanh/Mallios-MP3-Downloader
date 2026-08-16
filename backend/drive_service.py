@@ -741,3 +741,95 @@ def get_or_create_folder(folder_name: str, parent_id: str | None = None) -> str 
     with urllib.request.urlopen(req_create, timeout=20) as resp:
         res_data = json.loads(resp.read().decode("utf-8"))
         return res_data.get("id")
+
+
+def list_drive_music_files() -> list[dict]:
+    """
+    Quét và trả về danh sách tất cả các bài hát MP3 đang có trên Google Drive trong thư mục Mallios Music.
+    Hỗ trợ cả Google Apps Script Web App lẫn OAuth 2.0.
+    """
+    auth = load_auth()
+    script_url = auth.get("script_url", "").strip()
+
+    # 1. Quét qua Google Apps Script Web App
+    if script_url:
+        try:
+            url = f"{script_url}?action=list"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mallios-MP3/3.7"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("status") == "success":
+                    files = data.get("files", [])
+                    result = []
+                    for f in files:
+                        raw_name = f.get("name", "")
+                        title = raw_name[:-4] if raw_name.lower().endswith(".mp3") else raw_name
+                        artist = f.get("artist") or "Mallios"
+                        file_id = f.get("id", "")
+                        web_link = f.get("url") or f"https://drive.google.com/file/d/{file_id}/view"
+                        updated_ts = int(f.get("updated", 0) / 1000) if f.get("updated") else int(time.time())
+                        result.append({
+                            "drive_file_id": file_id,
+                            "drive_web_link": web_link,
+                            "title": title,
+                            "uploader": artist,
+                            "filename": raw_name,
+                            "timestamp": updated_ts,
+                            "storage_type": "drive"
+                        })
+                    return result
+        except Exception:
+            return []
+
+    # 2. Quét qua OAuth 2.0 API
+    token = get_valid_access_token()
+    if not token:
+        return []
+
+    try:
+        root_folder_name = auth.get("folder_name", "Mallios Music")
+        root_folder_id = get_or_create_folder(root_folder_name)
+        if not root_folder_id:
+            return []
+
+        # Lấy tất cả thư mục con (các ca sĩ)
+        q_folders = f"mimeType='application/vnd.google-apps.folder' and '{root_folder_id}' in parents and trashed=false"
+        url_folders = f"https://www.googleapis.com/drive/v3/files?q={urllib.parse.quote(q_folders)}&fields=files(id,name)"
+        req_folders = urllib.request.Request(url_folders, headers={"Authorization": f"Bearer {token}"})
+        
+        folder_map = {root_folder_id: "Mallios"}
+        with urllib.request.urlopen(req_folders, timeout=8) as resp:
+            f_data = json.loads(resp.read().decode("utf-8"))
+            for f in f_data.get("files", []):
+                folder_map[f["id"]] = f["name"]
+
+        # Lấy tất cả file MP3 trong các folder đó
+        parents_query = " or ".join([f"'{fid}' in parents" for fid in folder_map.keys()])
+        q_files = f"mimeType='audio/mpeg' and ({parents_query}) and trashed=false"
+        url_files = f"https://www.googleapis.com/drive/v3/files?q={urllib.parse.quote(q_files)}&fields=files(id,name,parents,webViewLink,modifiedTime)&pageSize=1000"
+        req_files = urllib.request.Request(url_files, headers={"Authorization": f"Bearer {token}"})
+
+        result = []
+        with urllib.request.urlopen(req_files, timeout=10) as resp:
+            files_data = json.loads(resp.read().decode("utf-8"))
+            for f in files_data.get("files", []):
+                raw_name = f.get("name", "")
+                title = raw_name[:-4] if raw_name.lower().endswith(".mp3") else raw_name
+                parent_id = f.get("parents", [""])[0] if f.get("parents") else ""
+                artist = folder_map.get(parent_id, "Mallios")
+                file_id = f.get("id", "")
+                web_link = f.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view"
+                
+                result.append({
+                    "drive_file_id": file_id,
+                    "drive_web_link": web_link,
+                    "title": title,
+                    "uploader": artist,
+                    "filename": raw_name,
+                    "timestamp": int(time.time()),
+                    "storage_type": "drive"
+                })
+        return result
+    except Exception:
+        return []
+

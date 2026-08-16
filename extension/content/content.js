@@ -520,6 +520,9 @@
   lock.waitLock(30000);
   try {
     var data = JSON.parse(e.postData.contents);
+    if (data.action === "list") {
+      return getFileListOutput();
+    }
     var filename = data.filename || "song.mp3";
     var artist = data.artist || "Mallios";
     var base64Data = data.base64;
@@ -571,10 +574,73 @@
 }
 
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || "ping";
+  if (action === "list") {
+    return getFileListOutput();
+  }
   return ContentService.createTextOutput(JSON.stringify({
     status: "success",
     message: "Mallios Google Drive Apps Script is ready!"
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getFileListOutput() {
+  try {
+    var rootFolder = DriveApp.getRootFolder();
+    var rootFolders = rootFolder.getFoldersByName("Mallios Music");
+    if (!rootFolders.hasNext()) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", files: [] })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var malliosFolder = rootFolders.next();
+    var result = [];
+    
+    var rootFiles = malliosFolder.getFilesByType("audio/mpeg");
+    while (rootFiles.hasNext()) {
+      var f = rootFiles.next();
+      if (!f.isTrashed()) {
+        result.push({
+          id: f.getId(),
+          name: f.getName(),
+          artist: "Mallios",
+          url: f.getUrl(),
+          size: f.getSize(),
+          updated: f.getLastUpdated().getTime()
+        });
+      }
+    }
+    
+    var subFolders = malliosFolder.getFolders();
+    while (subFolders.hasNext()) {
+      var subF = subFolders.next();
+      if (!subF.isTrashed()) {
+        var artistName = subF.getName();
+        var subFiles = subF.getFilesByType("audio/mpeg");
+        while (subFiles.hasNext()) {
+          var sf = subFiles.next();
+          if (!sf.isTrashed()) {
+            result.push({
+              id: sf.getId(),
+              name: sf.getName(),
+              artist: artistName,
+              url: sf.getUrl(),
+              size: sf.getSize(),
+              updated: sf.getLastUpdated().getTime()
+            });
+          }
+        }
+      }
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      files: result
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }`;
 
     let currentStorageTarget = localStorage.getItem('yt_mp3_storage_target') || 'local';

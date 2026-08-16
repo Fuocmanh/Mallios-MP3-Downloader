@@ -1670,15 +1670,34 @@ def sync_history():
         if cp.is_dir() and cp != DEFAULT_DOWNLOAD_FOLDER:
             folders_to_scan.append(cp)
 
+    # 1. Quét danh sách bài hát trên Google Drive (nếu đã kết nối)
+    drive_files = []
+    is_drive_scanned = False
+    try:
+        drive_files = drive_service.list_drive_music_files()
+        if drive_files is not None and len(drive_files) > 0:
+            is_drive_scanned = True
+    except Exception:
+        pass
+
     with HISTORY_LOCK:
         raw_history = load_history()
         history = []
         removed_count = 0
 
-        # 1. Kiểm tra các bài hát hiện có trong lịch sử (Xóa bài nếu file trên máy đã bị xóa)
+        drive_ids_on_cloud = {f["drive_file_id"] for f in drive_files if f.get("drive_file_id")}
+
+        # 2. Kiểm tra các bài hát hiện có trong lịch sử (Xóa bài nếu file trên máy/Drive đã bị xóa)
         for item in raw_history:
             storage_type = item.get("storage_type", "local")
             if storage_type == "drive":
+                # Nếu đã quét Drive thành công và có danh sách file
+                if is_drive_scanned and drive_files:
+                    item_drive_id = item.get("drive_file_id", "")
+                    if item_drive_id and item_drive_id not in drive_ids_on_cloud:
+                        # File trên Google Drive đã bị xóa vào thùng rác hoặc xóa vĩnh viễn!
+                        removed_count += 1
+                        continue
                 history.append(item)
                 continue
 
@@ -1706,14 +1725,40 @@ def sync_history():
                     # File thực sự không còn trên máy tính -> Loại bỏ khỏi lịch sử!
                     removed_count += 1
 
+        existing_drive_ids = {item.get("drive_file_id") for item in history if item.get("drive_file_id")}
         existing_paths = {item.get("file_path", "").lower() for item in history if item.get("file_path")}
         existing_titles = {remove_vietnamese_accents(clean_video_title(item.get("title", ""))).lower().strip() for item in history if item.get("title")}
 
         added_count = 0
+
+        # 3. Tự động thêm các bài mới tìm thấy trên Google Drive
+        for df in drive_files:
+            df_id = df.get("drive_file_id")
+            clean_title_stem = remove_vietnamese_accents(clean_video_title(df.get("title", ""))).lower().strip()
+            if df_id in existing_drive_ids or clean_title_stem in existing_titles:
+                continue
+
+            new_record = {
+                "video_id": "",
+                "url": "",
+                "title": clean_video_title(df.get("title", "")),
+                "uploader": df.get("uploader", "Mallios"),
+                "file_path": "",
+                "relative_path": df.get("filename", ""),
+                "drive_file_id": df.get("drive_file_id", ""),
+                "drive_web_link": df.get("drive_web_link", ""),
+                "timestamp": df.get("timestamp", int(time.time())),
+                "storage_type": "drive"
+            }
+            history.append(new_record)
+            existing_drive_ids.add(df_id)
+            existing_titles.add(clean_title_stem)
+            added_count += 1
+
+        # 4. Quét các file .mp3 trên ổ đĩa máy tính
         for folder in folders_to_scan:
             if not folder.is_dir():
                 continue
-            # Quét tất cả file .mp3 trong thư mục gốc và thư mục con
             mp3_files = list(folder.glob("*.mp3")) + list(folder.glob("*/*.mp3")) + list(folder.glob("*/*/*.mp3"))
             for mp3_file in mp3_files:
                 if not mp3_file.is_file():
@@ -1762,7 +1807,7 @@ def sync_history():
         "added_count": added_count,
         "removed_count": removed_count,
         "history": history,
-        "message": f"Đã đồng bộ {len(history)} bài hát (Thêm {added_count}, xóa {removed_count} bài không còn trên máy)."
+        "message": f"Đã đồng bộ {len(history)} bài hát (Thêm {added_count}, xóa {removed_count} bài không còn tồn tại)."
     })
 
 

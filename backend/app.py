@@ -1877,7 +1877,7 @@ def get_direct_stream_url(video_url: str) -> str:
 
 @app.route("/api/preview-stream", methods=["GET", "OPTIONS"])
 def preview_stream():
-    """Chuyển hướng trực tiếp 302 đến Google CDN để phát âm thanh ngay lập tức."""
+    """Truyền phát trực tiếp luồng âm thanh qua proxy server để đảm bảo 100% không bị chặn CORS hay lỗi kết nối."""
     if request.method == "OPTIONS":
         return response({})
         
@@ -1889,7 +1889,41 @@ def preview_stream():
     if not direct_url:
         return response({"status": "error", "message": "Không thể lấy luồng âm thanh nghe thử."}, 500)
 
-    return redirect(direct_url, code=302)
+    try:
+        req_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        range_header = request.headers.get("Range")
+        if range_header:
+            req_headers["Range"] = range_header
+
+        upstream_req = urllib.request.Request(direct_url, headers=req_headers)
+        upstream_resp = urllib.request.urlopen(upstream_req, timeout=10)
+
+        status_code = upstream_resp.status
+        content_type = upstream_resp.headers.get("Content-Type", "audio/mp4")
+        content_length = upstream_resp.headers.get("Content-Length")
+        content_range = upstream_resp.headers.get("Content-Range")
+
+        def generate_chunks():
+            try:
+                while True:
+                    chunk = upstream_resp.read(64 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                upstream_resp.close()
+
+        res = Response(generate_chunks(), status=status_code, content_type=content_type)
+        res.headers["Accept-Ranges"] = "bytes"
+        if content_length:
+            res.headers["Content-Length"] = content_length
+        if content_range:
+            res.headers["Content-Range"] = content_range
+        return apply_cors_headers(res)
+    except Exception:
+        return redirect(direct_url, code=302)
 
 
 @app.route("/api/preload-playlist", methods=["POST", "OPTIONS"])

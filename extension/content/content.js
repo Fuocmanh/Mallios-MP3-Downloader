@@ -1462,15 +1462,21 @@ function getFileListOutput() {
         });
         const data = await res.json();
         if (res.ok && data.status === 'success') {
-          renderList(data.items);
-          showStatus(`✅ Tìm thấy ${data.items.length} bài!`, '#c2efb3');
-          applyTabLayout();
-          updateWindowPosition();
+          try {
+            renderList(data.items);
+            showStatus(`✅ Tìm thấy ${data.items.length} bài!`, '#c2efb3');
+            applyTabLayout();
+            updateWindowPosition();
+          } catch (renderErr) {
+            console.error("Lỗi khi hiển thị danh sách bài hát:", renderErr);
+            showStatus(`⚠️ Lỗi hiển thị danh sách: ${renderErr.message}`, '#f2b8b5');
+          }
         } else {
           showStatus(`❌ ${data.message || 'Không thể quét danh sách'}`, '#f2b8b5');
         }
       } catch (e) {
-        showStatus('❌ Lỗi kết nối Server Python!', '#f2b8b5');
+        console.error("Lỗi kết nối Server Python:", e);
+        showStatus('❌ Lỗi kết nối Server Python! Vui lòng kiểm tra Server đang chạy.', '#f2b8b5');
       }
     });
 
@@ -2126,12 +2132,17 @@ function getFileListOutput() {
           }
         }, { once: true });
 
+        cb.addEventListener('change', () => {
+          div.classList.toggle('selected', cb.checked);
+          updateCount();
+        });
+
         div.addEventListener('click', (e) => {
           if (e.target !== cb && e.target !== playBtn) {
             cb.checked = !cb.checked;
+            div.classList.toggle('selected', cb.checked);
+            updateCount();
           }
-          div.classList.toggle('selected', cb.checked);
-          updateCount();
         });
 
         container.appendChild(div);
@@ -2173,20 +2184,24 @@ function getFileListOutput() {
         }).catch(() => {});
       }
 
+      const selectAllBtn = document.getElementById('yt-select-all');
       let isAllSelected = false;
-      selectAllBtn.onclick = () => {
-        isAllSelected = !isAllSelected;
-        const checkboxes = container.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(cb => {
-          const parentDiv = cb.closest('.yt-mp3-item');
-          if (parentDiv && parentDiv.style.display !== 'none') {
-            cb.checked = isAllSelected;
-            parentDiv.classList.toggle('selected', isAllSelected);
-          }
-        });
-        selectAllBtn.innerText = isAllSelected ? "Bỏ chọn tất cả" : "Chọn tất cả";
-        updateCount();
-      };
+      if (selectAllBtn) {
+        selectAllBtn.innerText = "Chọn tất cả";
+        selectAllBtn.onclick = () => {
+          isAllSelected = !isAllSelected;
+          const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+          checkboxes.forEach(cb => {
+            const parentDiv = cb.closest('.yt-mp3-item');
+            if (parentDiv && parentDiv.style.display !== 'none') {
+              cb.checked = isAllSelected;
+              parentDiv.classList.toggle('selected', isAllSelected);
+            }
+          });
+          selectAllBtn.innerText = isAllSelected ? "Bỏ chọn tất cả" : "Chọn tất cả";
+          updateCount();
+        };
+      }
 
       updateCount();
     }

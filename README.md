@@ -1,15 +1,20 @@
-# Mallios MP3 Downloader (v3.5)
+# Mallios MP3 Downloader (v3.6)
 
 Mallios là tiện ích mở rộng Chrome chuyên nghiệp dành cho Windows, giúp tải âm thanh chất lượng cao từ YouTube, YouTube Music, SoundCloud... và chuyển đổi thành MP3 320kbps siêu tốc. 
 
-Hệ thống hoạt động với giao diện nút nổi thông minh trên trình duyệt kết hợp với máy chủ xử lý cục bộ Flask hiệu năng cao, hỗ trợ đồng bộ Google Drive, chia sẻ không dây sang điện thoại bằng mã QR và nghe thử nhạc tức thì.
+Hệ thống hoạt động với kiến trúc **In-Memory RAM Streaming & Zero-Temp File** giúp xử lý toàn bộ dữ liệu tạm trên bộ nhớ RAM, bảo vệ ổ cứng, hỗ trợ đồng bộ Google Drive với cơ chế Auto-Retry thông minh, chia sẻ không dây sang điện thoại bằng mã QR và nghe thử nhạc tức thì.
 
 > **Tuyên bố trách nhiệm:** Chỉ tải nội dung khi bạn có quyền tải, sử dụng hoặc lưu trữ nội dung đó. Bạn chịu trách nhiệm tuân thủ điều khoản dịch vụ của nền tảng nguồn và pháp luật hiện hành.
 
 ---
 
-## ⭐ Tính năng nổi bật (v3.5)
+## ⭐ Tính năng nổi bật (v3.6)
 
+- **🧠 Kiến Trúc In-Memory RAM Toàn Diện (Zero-Temp File):** Xử lý 100% dữ liệu raw, ảnh bìa, lọc `loudnorm` và nhúng ID3 trong bộ nhớ RAM ảo:
+  * **Lưu Google Drive:** Đẩy trực tiếp từ RAM lên mây, tuyệt đối không ghi file rác vào ổ cứng máy tính.
+  * **Lưu vào Máy tính:** Ghi duy nhất 1 lần file `.mp3` thành phẩm hoàn chỉnh, chấm dứt hoàn toàn lỗi file rác `.webp`, `.part` và lỗi khóa file `WinError 32` trên Windows.
+- **☁️ Hàng Đợi Upload & Tự Động Thử Lại (Drive Auto-Retry):** Tự động bắt lỗi mạng `WinError 10060` / timeout và thử lại 3 lần với hàng đợi độc lập (tối đa 2 upload đồng thời) để bảo vệ Google Apps Script.
+- **🛡️ Bộ Điều Tiết Bộ Nhớ Thông Minh (Smart Memory Guard):** Bài ngắn chạy 5 luồng (~50MB RAM), bài dài 1 tiếng tự điều tiết 1-2 luồng cuốn chiếu (~140MB - 280MB RAM), giải phóng RAM ngay khi hoàn thành.
 - **Quét Playlist Tức Thì (0.001s):** Đọc trực tiếp danh sách bài hát từ bộ nhớ DOM của YouTube/YouTube Music trong chớp mắt mà không cần chờ nạp mạng.
 - **🔍 Tìm Kiếm & Lọc Playlist Tức Thì:** Ô tìm kiếm thời gian thực giúp lọc nhanh bài hát theo tên hoặc nghệ sĩ, cùng nút chọn tất cả bài đang hiển thị.
 - **Nghe Thử Nhạc Trực Tiếp (Direct 302 CDN Stream):** Chuyển hướng trực tiếp đến CDN tốc độ cao của Google, hỗ trợ phát âm thanh HTML5 và tua nhạc tùy thích không độ trễ.
@@ -20,7 +25,6 @@ Hệ thống hoạt động với giao diện nút nổi thông minh trên trìn
 - **🖼️ Tự Động Nhúng Ảnh Bìa & Thẻ ID3 Metadata:** Tự động nhúng Thumbnail độ nét cao và thẻ ID3 (Tên bài, Ca sĩ, Album) vào file MP3.
 - **✅ Huy Hiệu "Đã Có Trên Máy":** Tự động nhận diện bài hát đã tải và gắn huy hiệu màu xanh trong danh sách phát để tránh tải trùng.
 - **🔔 Thông Báo Màn Hình Windows:** Gửi thông báo Toast khi hoàn tất tải nhạc.
-- **☁️ Đồng Bộ & Dọn Dẹp Hoàn Toàn Google Drive:** Tự động upload lên Drive và cô lập dọn dẹp 100% file tạm trên máy tính.
 - **🔄 Tự Động Cập Nhật `yt-dlp` Ngầm:** Tự động kiểm tra và nâng cấp bộ máy `yt-dlp.exe` lên phiên bản mới nhất khi khởi động.
 - **Khởi Động 1-Click Thông Minh (All-In-One):** Tệp `run.bat` tự động phát hiện, tải công cụ còn thiếu (`yt-dlp`, `ffmpeg`), cài đặt thư viện Python và bật máy chủ chỉ với 1 cú click chuột.
 
@@ -64,8 +68,8 @@ Mallios/
 │   └── cookies.txt            (Tùy chọn: Cookie xác thực YouTube)
 │
 ├── backend/                   📁 Mã nguồn Python Flask API
-│   ├── app.py                 (API xử lý chính, tải đa luồng, stream CDN 302, dọn dẹp Drive)
-│   └── drive_service.py       (Dịch vụ tích hợp Google Drive OAuth 2.0 & Webhook)
+│   ├── app.py                 (API xử lý chính, In-Memory RAM Streaming, Smart Memory Guard)
+│   └── drive_service.py       (Dịch vụ Drive OAuth 2.0 & Apps Script với Auto-Retry 3 lần)
 │
 ├── extension/                 📁 Tiện ích mở rộng Google Chrome (Manifest V3)
 │   ├── manifest.json          (Cấu hình quyền, host permissions, context menus, notifications)

@@ -6,6 +6,7 @@ the accompanying Chrome extension, never exposed as an internet-facing API.
 
 from __future__ import annotations
 
+import gc
 import json
 import os
 import re
@@ -64,6 +65,7 @@ MATCHING_DUPLICATE_FILES = []
 CANCEL_REQUESTED = False
 ACTIVE_PROCESSES = {}
 ACTIVE_PROCESSES_LOCK = threading.Lock()
+DRIVE_UPLOAD_SEMAPHORE = threading.Semaphore(2)
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
@@ -1198,20 +1200,39 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                                 raise RuntimeError("Chưa kết nối tài khoản Google Drive.")
 
                             with PROGRESS_LOCK:
-                                PARALLEL_PROGRESS[state_key]["percent"] = 99.0
-                                PARALLEL_PROGRESS[state_key]["message"] = "Đang tải lên Google Drive..."
+                                PARALLEL_PROGRESS[state_key]["percent"] = 96.0
+                                PARALLEL_PROGRESS[state_key]["message"] = "Đang nạp file vào bộ nhớ RAM..."
 
                             def on_drive_progress(pct, msg):
                                 with PROGRESS_LOCK:
                                     PARALLEL_PROGRESS[state_key]["percent"] = pct
                                     PARALLEL_PROGRESS[state_key]["message"] = msg
 
-                            drive_res = drive_service.upload_mp3_to_drive(
-                                final_file_path,
-                                clean_filename,
-                                clean_parent_name,
-                                progress_callback=on_drive_progress
-                            )
+                            # Đọc toàn bộ dữ liệu MP3 vào bộ nhớ RAM ảo
+                            with open(final_file_path, "rb") as f_mp3:
+                                mp3_bytes = f_mp3.read()
+
+                            # Dọn dẹp xóa ngay lập tức file đĩa tạm trước khi bắt đầu upload
+                            try:
+                                if final_file_path.is_file():
+                                    final_file_path.unlink()
+                                if final_parent != effective_save_folder and final_parent.is_dir() and not any(final_parent.iterdir()):
+                                    final_parent.rmdir()
+                            except Exception:
+                                pass
+
+                            # Đẩy trực tiếp bytes từ RAM lên Drive với Semaphore giới hạn 2 upload đồng thời
+                            with DRIVE_UPLOAD_SEMAPHORE:
+                                drive_res = drive_service.upload_bytes_to_drive(
+                                    mp3_bytes,
+                                    clean_filename,
+                                    clean_parent_name,
+                                    progress_callback=on_drive_progress
+                                )
+
+                            # Giải phóng bộ nhớ RAM ngay lập tức
+                            del mp3_bytes
+                            gc.collect()
 
                             add_to_history(
                                 link,
@@ -1223,15 +1244,6 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                                 drive_file_id=drive_res.get("id", ""),
                                 drive_web_link=drive_res.get("webViewLink", "")
                             )
-
-                            # Dọn dẹp file tạm sau khi upload lên Drive thành công
-                            try:
-                                if final_file_path.is_file():
-                                    final_file_path.unlink()
-                                if final_parent != effective_save_folder and final_parent.is_dir() and not any(final_parent.iterdir()):
-                                    final_parent.rmdir()
-                            except Exception:
-                                pass
                         else:
                             # Thêm bản ghi vào lịch sử phát nhạc (local)
                             add_to_history(

@@ -359,22 +359,19 @@ def get_valid_access_token() -> str | None:
         return access_token
 
 
-def upload_via_apps_script(
+def upload_bytes_via_apps_script(
     script_url: str,
-    file_path: Path,
+    file_bytes: bytes,
     filename: str,
     artist_name: str = "",
     progress_callback = None
 ) -> dict:
-    """Tải file MP3 lên Google Drive thông qua Google Apps Script Web App."""
-    if not file_path.is_file():
-        raise FileNotFoundError(f"Không tìm thấy file MP3 để tải lên: {file_path}")
+    """Tải chuỗi bytes MP3 trực tiếp từ RAM lên Google Drive qua Apps Script với cơ chế Auto-Retry."""
+    if not file_bytes:
+        raise ValueError("Dữ liệu MP3 rỗng, không thể tải lên Google Drive.")
 
     if progress_callback:
-        progress_callback(95.0, "Đang mã hóa dữ liệu gửi lên Google Drive...")
-
-    with open(file_path, "rb") as f:
-        file_bytes = f.read()
+        progress_callback(96.0, "Đang chuẩn bị dữ liệu MP3 từ bộ nhớ RAM...")
 
     b64_content = base64.b64encode(file_bytes).decode("utf-8")
 
@@ -383,9 +380,6 @@ def upload_via_apps_script(
         "artist": artist_name.strip() if artist_name else "Mallios",
         "base64": b64_content
     }
-
-    if progress_callback:
-        progress_callback(97.0, "Đang đẩy file lên Google Drive qua Apps Script...")
 
     req_data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
@@ -397,34 +391,194 @@ def upload_via_apps_script(
         }
     )
 
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            res_text = resp.read().decode("utf-8", errors="replace")
-            try:
-                res_json = json.loads(res_text)
-            except Exception:
-                if "accounts.google.com" in res_text:
-                    raise RuntimeError("Google Apps Script yêu cầu đăng nhập. Vui lòng cài quyền 'Ai có quyền truy cập' (Who has access) là 'Bất kỳ ai' (Anyone).")
-                raise RuntimeError(f"Phản hồi từ Google Apps Script không hợp lệ: {res_text[:200]}")
-    except urllib.error.HTTPError as http_err:
-        raise RuntimeError(f"Lỗi HTTP từ Google Apps Script ({http_err.code}): {http_err.reason}")
-    except urllib.error.URLError as url_err:
-        raise RuntimeError(f"Không thể kết nối tới Google Apps Script: {url_err.reason}")
+    max_retries = 3
+    last_error = None
 
-    if res_json.get("status") != "success":
-        raise RuntimeError(res_json.get("message", "Lỗi không xác định từ Google Apps Script."))
+    for attempt in range(1, max_retries + 1):
+        if progress_callback:
+            retry_msg = f" (Lần thử {attempt}/{max_retries})" if attempt > 1 else ""
+            progress_callback(97.0, f"Đang đẩy file lên Google Drive qua Apps Script{retry_msg}...")
 
-    file_id = res_json.get("file_id", "")
-    view_url = res_json.get("url") or res_json.get("view_url") or (f"https://drive.google.com/file/d/{file_id}/view" if file_id else "https://drive.google.com")
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                res_text = resp.read().decode("utf-8", errors="replace")
+                try:
+                    res_json = json.loads(res_text)
+                except Exception:
+                    if "accounts.google.com" in res_text:
+                        raise RuntimeError("Google Apps Script yêu cầu đăng nhập. Vui lòng cài quyền 'Ai có quyền truy cập' (Who has access) là 'Bất kỳ ai' (Anyone).")
+                    raise RuntimeError(f"Phản hồi từ Google Apps Script không hợp lệ: {res_text[:200]}")
 
-    if progress_callback:
-        progress_callback(100.0, "Hoàn tất lưu trên Google Drive.")
+            if res_json.get("status") != "success":
+                raise RuntimeError(res_json.get("message", "Lỗi không xác định từ Google Apps Script."))
 
-    return {
-        "id": file_id,
+            file_id = res_json.get("file_id", "")
+            view_url = res_json.get("url") or res_json.get("view_url") or (f"https://drive.google.com/file/d/{file_id}/view" if file_id else "https://drive.google.com")
+
+            if progress_callback:
+                progress_callback(100.0, "Hoàn tất lưu trên Google Drive.")
+
+            return {
+                "id": file_id,
+                "name": filename,
+                "webViewLink": view_url
+            }
+
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as e:
+            last_error = e
+            if attempt < max_retries:
+                backoff_time = attempt * 2  # 2s, 4s, 6s
+                if progress_callback:
+                    progress_callback(97.0, f"Mạng bận, đang thử lại sau {backoff_time}s...")
+                time.sleep(backoff_time)
+            else:
+                if isinstance(e, urllib.error.HTTPError):
+                    raise RuntimeError(f"Lỗi HTTP từ Google Apps Script ({e.code}): {e.reason}")
+                elif isinstance(e, urllib.error.URLError):
+                    raise RuntimeError(f"Không thể kết nối tới Google Apps Script sau {max_retries} lần thử: {e.reason}")
+                else:
+                    raise RuntimeError(f"Lỗi kết nối tới Google Apps Script: {e}")
+
+    raise RuntimeError(f"Không thể tải file lên Google Drive: {last_error}")
+
+
+def upload_via_apps_script(
+    script_url: str,
+    file_path: Path,
+    filename: str,
+    artist_name: str = "",
+    progress_callback = None
+) -> dict:
+    """Tải file MP3 từ ổ đĩa lên Google Drive thông qua Google Apps Script Web App."""
+    if not file_path.is_file():
+        raise FileNotFoundError(f"Không tìm thấy file MP3 để tải lên: {file_path}")
+
+    with open(file_path, "rb") as f:
+        file_bytes = f.read()
+
+    return upload_bytes_via_apps_script(
+        script_url=script_url,
+        file_bytes=file_bytes,
+        filename=filename,
+        artist_name=artist_name,
+        progress_callback=progress_callback
+    )
+
+
+def upload_bytes_to_drive(
+    file_bytes: bytes,
+    filename: str,
+    artist_name: str = "",
+    progress_callback = None
+) -> dict:
+    """
+    Tải chuỗi bytes MP3 trực tiếp từ RAM lên Google Drive theo cấu trúc: Mallios Music / <Artist> / <Song.mp3>.
+    Tự động chọn giữa Apps Script Web App hoặc OAuth 2.0 API mà không cần ghi ra đĩa.
+    """
+    if not file_bytes:
+        raise ValueError("Dữ liệu MP3 rỗng, không thể tải lên Google Drive.")
+
+    auth = load_auth()
+    script_url = auth.get("script_url", "").strip()
+
+    # 1. Nếu dùng Google Apps Script Web App
+    if script_url:
+        return upload_bytes_via_apps_script(
+            script_url=script_url,
+            file_bytes=file_bytes,
+            filename=filename,
+            artist_name=artist_name,
+            progress_callback=progress_callback
+        )
+
+    # 2. Nếu dùng OAuth 2.0
+    token = get_valid_access_token()
+    if not token:
+        raise RuntimeError("Chưa kết nối Google Drive. Vui lòng dán Web App URL hoặc kết nối tài khoản.")
+
+    root_folder_name = auth.get("folder_name", "Mallios Music")
+
+    # Tìm/Tạo thư mục
+    root_folder_id = get_or_create_folder(root_folder_name)
+    target_folder_id = root_folder_id
+
+    if artist_name and artist_name.strip():
+        target_folder_id = get_or_create_folder(artist_name.strip(), parent_id=root_folder_id)
+
+    # Resumable upload
+    init_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable"
+    metadata = {
         "name": filename,
-        "webViewLink": view_url
+        "mimeType": "audio/mpeg",
+        "parents": [target_folder_id]
     }
+
+    total_size = len(file_bytes)
+    init_req = urllib.request.Request(
+        init_url,
+        data=json.dumps(metadata).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Upload-Content-Type": "audio/mpeg",
+            "X-Upload-Content-Length": str(total_size)
+        }
+    )
+
+    with urllib.request.urlopen(init_req, timeout=30) as resp:
+        upload_location = resp.headers.get("Location")
+
+    if not upload_location:
+        raise RuntimeError("Không lấy được URL khởi tạo Resumable Upload từ Google Drive.")
+
+    chunk_size = 2 * 1024 * 1024
+    bytes_sent = 0
+    while bytes_sent < total_size:
+        chunk = file_bytes[bytes_sent:bytes_sent + chunk_size]
+        chunk_len = len(chunk)
+        range_header = f"bytes {bytes_sent}-{bytes_sent + chunk_len - 1}/{total_size}"
+
+        req_chunk = urllib.request.Request(
+            upload_location,
+            data=chunk,
+            headers={
+                "Content-Range": range_header,
+                "Content-Type": "audio/mpeg"
+            },
+            method="PUT"
+        )
+
+        try:
+            with urllib.request.urlopen(req_chunk, timeout=60) as chunk_resp:
+                if chunk_resp.status in {200, 201}:
+                    result_data = json.loads(chunk_resp.read().decode("utf-8"))
+                    file_id = result_data.get("id")
+                    web_view_link = f"https://drive.google.com/file/d/{file_id}/view"
+                    
+                    if progress_callback:
+                        progress_callback(100.0, "Hoàn tất lưu trên Google Drive.")
+
+                    return {
+                        "id": file_id,
+                        "name": filename,
+                        "webViewLink": web_view_link,
+                        "folder_id": target_folder_id
+                    }
+        except urllib.error.HTTPError as http_err:
+            if http_err.code == 308:
+                bytes_sent += chunk_len
+                if progress_callback:
+                    percent = min(99.0, round((bytes_sent / total_size) * 100.0, 1))
+                    progress_callback(percent, f"Đang upload lên Drive ({percent}%)...")
+            else:
+                raise
+
+        bytes_sent += chunk_len
+        if progress_callback:
+            percent = min(99.0, round((bytes_sent / total_size) * 100.0, 1))
+            progress_callback(percent, f"Đang upload lên Drive ({percent}%)...")
+
+    return {}
 
 
 def upload_mp3_to_drive(

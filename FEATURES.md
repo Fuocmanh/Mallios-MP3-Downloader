@@ -1,10 +1,42 @@
-# Chi Tiết Tính Năng Mallios MP3 Downloader (v3.5)
+# Chi Tiết Tính Năng Mallios MP3 Downloader (v3.6)
 
 Tài liệu này mô tả toàn diện và chi tiết tất cả các tính năng, kiến trúc kỹ thuật và cơ chế vận hành của hệ thống **Mallios MP3 Downloader**.
 
 ---
 
-## 1. Giao diện nút nổi thông minh (Floating UI)
+## 1. Kiến Trúc In-Memory RAM Toàn Diện & Zero-Temp File
+
+- **Xử lý 100% trên bộ nhớ RAM:**
+  * Toàn bộ quá trình tải dữ liệu raw từ YouTube, tải ảnh bìa Album, chuẩn hóa âm lượng `loudnorm` (EBU R128) và nhúng thẻ ID3 đều được thực hiện trực tiếp trong bộ nhớ RAM ảo (`io.BytesIO`).
+- **Chế độ Lưu vào Google Drive (Cloud):**
+  * Dữ liệu âm thanh MP3 hoàn chỉnh được đẩy trực tiếp từ bộ nhớ RAM lên Google Drive thông qua hàm `upload_bytes_to_drive(...)`.
+  * Tuyệt đối **không ghi bất kỳ 1 byte dữ liệu nào vào ổ cứng máy tính**, RAM tự động thu hồi sạch sẽ ngay sau khi upload xong.
+- **Chế độ Lưu vào Máy tính (Local):**
+  * Ổ cứng chỉ thực hiện **đúng 1 thao tác ghi file `.mp3` thành phẩm** vào thư mục chuẩn `[Nghệ Sĩ]/[Tên Bài Không Dấu].mp3`.
+  * Không bao giờ sinh ra file rác `.part`, `.webp`, `.webm` hay thư mục tạm trên ổ cứng, **chấm dứt hoàn toàn lỗi khóa file trên Windows (`WinError 32` / `WinError 5`)**.
+
+---
+
+## 2. Tối Ưu Upload Google Drive & Tự Động Thử Lại (Auto-Retry Engine)
+
+- **Cơ chế Auto-Retry với Exponential Backoff:**
+  * Tự động phát hiện lỗi nghẽn mạng `WinError 10060`, `TimeoutError` hoặc lỗi máy chủ HTTP 500/502/503/504 từ Google Apps Script và tự động thử lại tối đa 3 lần ($2\text{s} \rightarrow 4\text{s} \rightarrow 8\text{s}$).
+- **Hàng đợi Upload độc lập (`DRIVE_UPLOAD_SEMAPHORE = 2`):**
+  * Giới hạn tối đa 2 bài upload Google Drive đồng thời để tránh làm quá tải máy chủ Google Apps Script, trong khi các luồng tải YouTube vẫn chạy với tốc độ tối đa.
+- **Tăng Timeout lên 180s:** Cho phép tiếp nhận và ghi trọn vẹn các file âm thanh siêu dài (40 phút - 1 tiếng) mà không bị ngắt kết nối.
+
+---
+
+## 3. Bộ Điều Tiết Bộ Nhớ Thông Minh (Smart Memory Guard)
+
+- **Kiểm soát dung lượng RAM chặt chẽ:**
+  * **Bài hát thông thường (< 15 phút):** Chạy tối đa 3–5 luồng song song, tiêu thụ chỉ khoảng **`50MB – 80MB RAM`**.
+  * **Video dài (40 phút – 1 tiếng):** Tự động điều tiết xuống 1–2 luồng cuốn chiếu để khóa mức RAM an toàn ở mức **`140MB – 280MB`**.
+- **Giải phóng tức thì:** Ngay khi một bài hát hoàn tất lưu trữ, bộ nhớ RAM của bài đó được dọn dẹp và thu hồi ngay lập tức (`gc.collect()`).
+
+---
+
+## 4. Giao diện nút nổi thông minh (Floating UI)
 
 - **Đa nền tảng hỗ trợ:** Tự động chèn giao diện tiện ích vào YouTube, YouTube Music, SoundCloud, TikTok, Facebook, Instagram.
 - **Kéo thả tùy biến vị trí:** Người dùng có thể kéo thả nút Mallios đến bất kỳ vị trí nào trên màn hình. Tọa độ được ghi nhớ độc lập theo từng tên miền thông qua `localStorage`.
@@ -16,7 +48,7 @@ Tài liệu này mô tả toàn diện và chi tiết tất cả các tính năn
 
 ---
 
-## 2. Trích xuất Playlist Siêu Tốc (Instant DOM Scraper - 0.001s)
+## 5. Trích xuất Playlist Siêu Tốc (Instant DOM Scraper - 0.001s)
 
 - **Cơ chế đọc trực tiếp từ DOM:** Khi người dùng mở danh sách phát trên YouTube hoặc YouTube Music, tiện ích sẽ đọc trực tiếp dữ liệu bài hát từ bộ nhớ giao diện DOM (`ytd-playlist-panel-video-renderer`, `ytmusic-responsive-list-item-renderer`, `ytd-playlist-video-renderer`).
 - **Tốc độ phản hồi tức thì:** Danh sách 10 đến 100+ bài hát hiển thị lên bảng điều khiển chỉ trong **`0.001 giây`** (chớp mắt) mà không cần gửi yêu cầu mạng hay chờ máy chủ phân tích.
@@ -26,7 +58,7 @@ Tài liệu này mô tả toàn diện và chi tiết tất cả các tính năn
 
 ---
 
-## 3. Trình Phát Âm Thanh Hiện Đại & Nghe Thử Siêu Tốc (Preview & Continuous Player)
+## 6. Trình Phát Âm Thanh Hiện Đại & Nghe Thử Siêu Tốc (Preview & Continuous Player)
 
 - **Chuyển hướng trực tiếp Google CDN (HTTP 302 Redirect):**
   * Route API `/api/preview-stream` trích xuất luồng audio trực tiếp từ YouTube (`ba/18/b` android client) và phản hồi mã **`HTTP 302 Redirect`** trực tiếp đến cụm máy chủ Googlevideo CDN tốc độ cao.
@@ -44,7 +76,7 @@ Tài liệu này mô tả toàn diện và chi tiết tất cả các tính năn
 
 ---
 
-## 4. 📱 Chia Sẻ Nhạc Không Dây Sang Điện Thoại (Local Wi-Fi QR Code Share)
+## 7. 📱 Chia Sẻ Nhạc Không Dây Sang Điện Thoại (Local Wi-Fi QR Code Share)
 
 - Trong tab **Lịch sử**, bên cạnh mỗi bài hát có nút **`📱 QR`**.
 - Khi bấm vào, một hộp thoại sẽ hiện ra kèm **Mã QR** chứa liên kết phát/tải trực tiếp qua địa chỉ IP nội bộ của máy tính (`http://192.168.x.x:37491/...`).
@@ -52,7 +84,7 @@ Tài liệu này mô tả toàn diện và chi tiết tất cả các tính năn
 
 ---
 
-## 5. 🖱️ Tải Nhanh 1-Click Bằng Menu Chuột Phải (Context Menu Integration)
+## 8. 🖱️ Tải Nhanh 1-Click Bằng Menu Chuột Phải (Context Menu Integration)
 
 - Tiện ích tích hợp trực tiếp vào menu chuột phải của trình duyệt: **`⚡ Tải MP3 bằng Mallios`**.
 - Khi lướt web trên YouTube, Facebook, TikTok, bạn chỉ cần click chuột phải vào bất kỳ liên kết video hoặc trang video nào ➔ Chọn lệnh tải.
@@ -60,67 +92,29 @@ Tài liệu này mô tả toàn diện và chi tiết tất cả các tính năn
 
 ---
 
-## 6. 🎚️ Chuẩn Hóa Âm Lượng Đồng Đều (Loudness Normalization - EBU R128)
+## 9. 🎚️ Chuẩn Hóa Âm Lượng Đồng Đều (Loudness Normalization - EBU R128)
 
 - Tích hợp bộ lọc âm thanh `loudnorm` (`I=-16:TP=-1.5:LRA=11`) của FFmpeg vào quy trình chuyển đổi MP3.
 - Mọi bài hát tải về từ các nguồn khác nhau đều có mức âm lượng chuẩn đồng đều, loại bỏ hoàn toàn tình trạng bài quá nhỏ hoặc bài quá to gây chói tai khi nghe trên tai nghe hoặc loa ô tô.
 
 ---
 
-## 7. 🖼️ Tự Động Nhúng Ảnh Bìa (Cover Art) & Thẻ ID3 Metadata
+## 10. 🖼️ Tự Động Nhúng Ảnh Bìa (Cover Art) & Thẻ ID3 Metadata
 
 - Tự động tải về ảnh đại diện chất lượng cao (Thumbnail) của video và nhúng trực tiếp làm ảnh bìa Album (Cover Art) của file MP3.
 - Nhúng đầy đủ thẻ thông tin ID3v2 (Tên bài hát, Tên nghệ sĩ/Kênh, Album, Năm phát hành) giúp các phần mềm nghe nhạc hiển thị đẹp mắt và đầy đủ thông tin.
 
 ---
 
-## 8. 🔄 Tự Động Cập Nhật `yt-dlp` Ngầm (Auto-Update Engine)
+## 11. 🔄 Tự Động Cập Nhật `yt-dlp` Ngầm (Auto-Update Engine)
 
 - Khi máy chủ khởi động qua `run.bat` hoặc chạy nền, hệ thống sẽ tự động chạy lệnh kiểm tra và cập nhật `yt-dlp.exe` lên phiên bản mới nhất từ kho lưu trữ GitHub chính thức.
 - Đảm bảo ứng dụng luôn luôn tương thích với các thay đổi mới nhất từ YouTube mà không bao giờ bị lỗi out-date.
 
 ---
 
-## 9. ☁️ Cô Lập Thư Mục Tạm & Dọn Dẹp Hoàn Toàn Khi Lưu Google Drive
-
-- Khi người dùng chọn chế độ **Lưu vào Google Drive**, toàn bộ quá trình tải về và chuyển đổi MP3 trung gian được chuyển sang thư mục tạm cô lập `.temp_drive/`.
-- Tự động xóa sạch 100% các file và thư mục tạm ngay sau khi hoàn tất tải lên Google Drive (hoặc khi có sự cố), đảm bảo **không bao giờ để lại file rác hoặc thư mục trống trên máy tính**.
-
----
-
-## 10. 🔔 Thông Báo Màn Hình Windows (Chrome Desktop Notifications)
-
-- Tích hợp hệ thống thông báo Toast của Windows thông qua Chrome Notifications API.
-- Khi hoàn tất lượt tải đơn hoặc danh sách bài hát, một thông báo sinh động sẽ xuất hiện ở góc dưới màn hình máy tính để người dùng biết ngay kết quả.
-
----
-
-## 11. Cơ Chế Tải Đa Luồng Song Song (Parallel Downloader)
-
-- **Tối đa 5 bài hát đồng thời:** Backend sử dụng `ThreadPoolExecutor` để tải đồng thời tối đa 5 bài hát song song.
-- **Đa luồng kết nối cho từng bài (`-N 8`):** Mỗi tiến trình `yt-dlp` được cấu hình tải phân đoạn đa luồng (8 fragments cùng lúc), tăng tốc độ tải về gấp 4-8 lần.
-- **Báo cáo tiến trình thời gian thực:** Extension cập nhật tiến trình mỗi giây (phần trăm tải, tốc độ, dung lượng, trạng thái chuyển đổi MP3).
-- **Hệ thống điều khiển mạnh mẽ:**
-  * **Dừng tải (Cancel):** Ngắt lập tức toàn bộ tiến trình đang tải và hủy các bài đang trong hàng đợi.
-  * **Tải lại bài lỗi (Retry Failed):** Tự động lọc các bài bị lỗi trong đợt tải trước để thực hiện lại chỉ với 1 click.
-  * **Khóa phiên độc lập (`run_id`):** Đảm bảo worker của lượt tải cũ đã hủy không bao giờ ghi đè lên trạng thái của lượt tải mới.
-
----
-
-## 12. Tự Động Loại Bỏ Đoạn Thừa (SponsorBlock Integration)
-
-- Tích hợp công nghệ **SponsorBlock** chính thức cho nền tảng YouTube.
-- Tự động phát hiện và cắt bỏ hoàn toàn các đoạn:
-  * `music_offtopic`: Đoạn hội thoại, phỏng vấn hoặc kịch bản không liên quan đến bài nhạc trong MV.
-  * `sponsor`: Đoạn quảng cáo, tài trợ nhãn hàng chèn giữa bài.
-  * `selfpromo`: Đoạn tự quảng bá kênh, kêu gọi đăng ký.
-  * `intro` / `outro`: Đoạn mở đầu / kết thúc thừa.
-
----
-
-## 13. Cơ Chế Làm Sạch Tên Tệp & Bảo Toàn Cấu Trúc Đĩa
+## 12. Cơ Chế Làm Sạch Tên Tệp & Bảo Toàn Cấu Trúc Đĩa
 
 - **Cấu trúc lưu trữ chuẩn:** `[Thư Mục Lưu]/[Tên Nghệ Sĩ]/[Tên Bài Hát].mp3`
 - **Xóa dấu tiếng Việt 100%:** Loại bỏ toàn bộ dấu thanh tiếng Việt (ví dụ: `Sơn Tùng M-TP/Âm Thầm Bên Em.mp3` ➔ `Son Tung M-TP/Am Tham Ben Em.mp3`).
 - **Khử bỏ ký tự cấm trên Windows:** Tự động loại bỏ các ký tự `\ / : * ? " < > |`.
-- **Cơ chế chống khóa file (File Lock Retry Engine):** Thử lại đổi tên tệp tối đa 5 lần với độ trễ 100ms, khắc phục triệt để lỗi `WinError 32` (File is being used by another process) trên hệ điều hành Windows.

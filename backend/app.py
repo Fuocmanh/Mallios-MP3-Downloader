@@ -1006,9 +1006,6 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     
     is_youtube = any(host in link.lower() for host in YOUTUBE_HOSTS)
     if is_youtube:
-        arguments.extend([
-            "--extractor-args", "youtube:player_client=ios,tv,web_creator,default"
-        ])
         if enable_sponsorblock:
             arguments.extend([
                 "--sponsorblock-remove", "music_offtopic,sponsor,selfpromo,intro,outro"

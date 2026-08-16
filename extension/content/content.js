@@ -287,19 +287,47 @@
     const optLoudnorm = document.getElementById('yt-opt-loudnorm');
     const optSponsorBlock = document.getElementById('yt-opt-sponsorblock');
     const optThumbnail = document.getElementById('yt-opt-thumbnail');
+    const qualitySelect = document.getElementById('yt-quality-select');
+    let currentStorageTarget = localStorage.getItem('yt_mp3_storage_target') || 'local';
 
+    function syncSettingsToStorage() {
+      const settings = {
+        yt_mp3_storage_target: currentStorageTarget,
+        yt_mp3_save_path: pathInput ? pathInput.value.trim() : '',
+        yt_mp3_quality: qualitySelect ? qualitySelect.value : '0',
+        yt_opt_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
+        yt_opt_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
+        yt_opt_thumbnail: optThumbnail ? optThumbnail.checked : false
+      };
+      for (const [key, val] of Object.entries(settings)) {
+        localStorage.setItem(key, typeof val === 'boolean' ? (val ? 'true' : 'false') : val);
+      }
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set(settings);
+        }
+      } catch (_) {}
+    }
+
+    if (qualitySelect) {
+      qualitySelect.value = localStorage.getItem('yt_mp3_quality') || '0';
+      qualitySelect.addEventListener('change', () => syncSettingsToStorage());
+    }
     if (optLoudnorm) {
       optLoudnorm.checked = localStorage.getItem('yt_opt_loudnorm') === 'true';
-      optLoudnorm.addEventListener('change', () => localStorage.setItem('yt_opt_loudnorm', optLoudnorm.checked));
+      optLoudnorm.addEventListener('change', () => syncSettingsToStorage());
     }
     if (optSponsorBlock) {
       optSponsorBlock.checked = localStorage.getItem('yt_opt_sponsorblock') === 'true';
-      optSponsorBlock.addEventListener('change', () => localStorage.setItem('yt_opt_sponsorblock', optSponsorBlock.checked));
+      optSponsorBlock.addEventListener('change', () => syncSettingsToStorage());
     }
     if (optThumbnail) {
       optThumbnail.checked = localStorage.getItem('yt_opt_thumbnail') === 'true';
-      optThumbnail.addEventListener('change', () => localStorage.setItem('yt_opt_thumbnail', optThumbnail.checked));
+      optThumbnail.addEventListener('change', () => syncSettingsToStorage());
     }
+
+    // Tự động đồng bộ các thiết lập lên chrome.storage khi khởi chạy
+    syncSettingsToStorage();
 
     function getDownloadOptions() {
       return {
@@ -478,7 +506,10 @@
 
     pathInput.value = localStorage.getItem('yt_mp3_save_path') || '';
     pathInput.addEventListener('change', () => {
-      localStorage.setItem('yt_mp3_save_path', pathInput.value.trim());
+      syncSettingsToStorage();
+    });
+    pathInput.addEventListener('input', () => {
+      syncSettingsToStorage();
     });
 
     browseBtn.addEventListener('click', async () => {
@@ -488,7 +519,7 @@
         const data = await res.json();
         if (data.status === 'success' && data.path) {
           pathInput.value = data.path;
-          localStorage.setItem('yt_mp3_save_path', data.path);
+          syncSettingsToStorage();
           showStatus(`✅ Đã chọn: ${data.path}`, '#c2efb3');
         } else {
           showStatus('', '');
@@ -643,12 +674,11 @@ function getFileListOutput() {
   }
 }`;
 
-    let currentStorageTarget = localStorage.getItem('yt_mp3_storage_target') || 'local';
     let isDriveConnected = false;
 
     function applyStorageTarget(target) {
       currentStorageTarget = target;
-      localStorage.setItem('yt_mp3_storage_target', target);
+      syncSettingsToStorage();
       if (target === 'drive') {
         if (storageDriveBtn) storageDriveBtn.classList.add('active');
         if (storageLocalBtn) storageLocalBtn.classList.remove('active');

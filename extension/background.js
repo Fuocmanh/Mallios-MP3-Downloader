@@ -165,17 +165,34 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     } catch (_) {}
 
     try {
+      // Đọc các thiết lập người dùng đã lưu từ giao diện tiện ích
+      const settings = await chrome.storage.local.get([
+        "yt_mp3_storage_target",
+        "yt_mp3_save_path",
+        "yt_mp3_quality",
+        "yt_opt_loudnorm",
+        "yt_opt_sponsorblock",
+        "yt_opt_thumbnail"
+      ]);
+
+      const save_target = settings.yt_mp3_storage_target || "local";
+      const download_path = settings.yt_mp3_save_path || "";
+      const quality = settings.yt_mp3_quality || "0";
+      const enable_loudnorm = !!settings.yt_opt_loudnorm;
+      const enable_sponsorblock = !!settings.yt_opt_sponsorblock;
+      const embed_thumbnail = !!settings.yt_opt_thumbnail;
+
       const res = await proxyApiRequest("/download", {
         method: "POST",
         body: JSON.stringify({
           links: [targetUrl],
           max_files: 1,
-          quality: "0",
-          download_path: "",
-          save_target: "local",
-          enable_loudnorm: false,
-          enable_sponsorblock: false,
-          embed_thumbnail: false
+          quality: quality,
+          download_path: download_path,
+          save_target: save_target,
+          enable_loudnorm: enable_loudnorm,
+          enable_sponsorblock: enable_sponsorblock,
+          embed_thumbnail: embed_thumbnail
         })
       });
       

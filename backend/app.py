@@ -1776,7 +1776,7 @@ def background_preload_streams(urls: list[str]):
 
 
 def get_direct_stream_url(video_url: str) -> str:
-    """Lấy direct audio stream URL từ yt-dlp với cache RAM và khóa chống nghẽn luồng."""
+    """Lấy direct audio stream URL từ yt-dlp với cache RAM, module in-process siêu tốc và khóa chống nghẽn luồng."""
     now = time.time()
     with PREVIEW_CACHE_LOCK:
         # TTL Eviction: Tự động dọn dẹp các cache quá hạn để tránh phình bộ nhớ RAM
@@ -1806,30 +1806,57 @@ def get_direct_stream_url(video_url: str) -> str:
         return ""
 
     try:
+        # 1. Trích xuất siêu tốc bằng module yt_dlp trực tiếp trong Python (0 ms khởi tạo tiến trình)
+        try:
+            import yt_dlp
+            ydl_opts = {
+                'format': '18/ba/b/best',
+                'extractor_args': {'youtube': {'player_client': ['android']}},
+                'quiet': True,
+                'no_warnings': True,
+                'noplaylist': True
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+                direct_url = info.get('url')
+                if not direct_url:
+                    formats = info.get('formats') or []
+                    for f in reversed(formats):
+                        if f.get('url') and f.get('acodec') != 'none':
+                            direct_url = f['url']
+                            break
+                if direct_url:
+                    with PREVIEW_CACHE_LOCK:
+                        PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 3600)
+                    return direct_url
+        except Exception:
+            pass
+
+        # 2. Fallback sang lệnh subprocess
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
         env["LANG"] = "en_US.UTF-8"
         
         candidates = [
-            ["-g", "-f", "ba/18/b", "--extractor-args", "youtube:player_client=android", "--no-playlist", "--no-warnings", video_url],
+            ["-g", "-f", "18/ba/b/best", "--extractor-args", "youtube:player_client=android", "--no-playlist", "--no-warnings", video_url],
             ["-g", "-f", "ba/18/b", "--extractor-args", "youtube:player_client=ios,mweb", "--no-playlist", "--no-warnings", video_url],
             ["-g", "-f", "ba/b/best", "--no-playlist", "--no-warnings", video_url]
         ]
 
         for base_cmd in candidates:
-            cmd = [str(YTDLP_PATH), *add_cookie_args(base_cmd)]
+            cmd = [str(YTDLP_PATH), *base_cmd]
             try:
                 completed = subprocess.run(
                     cmd,
                     capture_output=True, text=True, encoding="utf-8", errors="replace",
-                    creationflags=CREATE_NO_WINDOW, timeout=12, env=env
+                    creationflags=CREATE_NO_WINDOW, timeout=6, env=env
                 )
                 if completed.returncode == 0:
                     lines = [l.strip() for l in completed.stdout.splitlines() if l.strip() and l.startswith("http")]
                     if lines:
                         direct_url = lines[0]
                         with PREVIEW_CACHE_LOCK:
-                            PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 1800)
+                            PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 3600)
                         return direct_url
             except Exception:
                 pass
@@ -1866,8 +1893,8 @@ def preload_playlist():
     data = request.get_json(silent=True) or {}
     urls = data.get("urls", [])
     if isinstance(urls, list) and urls:
-        # Nạp trước tối đa 5 bài đầu tiên vào RAM cache
-        background_preload_streams(urls[:5])
+        # Nạp trước tối đa 8 bài đầu tiên vào RAM cache
+        background_preload_streams(urls[:8])
     return response({"status": "success"})
 
 

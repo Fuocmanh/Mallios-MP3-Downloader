@@ -1748,10 +1748,18 @@ function getFileListOutput() {
         }
       }
 
-      // Nạp trước danh sách luồng âm thanh bài tiếp theo
-      const nextIdx = (index + 1) % currentPlaylistItems.length;
-      if (currentPlaylistItems[nextIdx] && currentPlaylistItems[nextIdx].url) {
-        fetch(`${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(currentPlaylistItems[nextIdx].url)}`).catch(() => {});
+      // Nạp trước danh sách luồng âm thanh các bài tiếp theo vào RAM máy chủ
+      const nextIdx1 = (index + 1) % currentPlaylistItems.length;
+      const nextIdx2 = (index + 2) % currentPlaylistItems.length;
+      const urlsToPreload = [];
+      if (currentPlaylistItems[nextIdx1]?.url) urlsToPreload.push(currentPlaylistItems[nextIdx1].url);
+      if (currentPlaylistItems[nextIdx2]?.url) urlsToPreload.push(currentPlaylistItems[nextIdx2].url);
+      if (urlsToPreload.length > 0) {
+        fetch(`${API_BASE_URL}/api/preload-playlist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: urlsToPreload })
+        }).catch(() => {});
       }
     }
 

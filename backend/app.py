@@ -1671,7 +1671,41 @@ def sync_history():
             folders_to_scan.append(cp)
 
     with HISTORY_LOCK:
-        history = load_history()
+        raw_history = load_history()
+        history = []
+        removed_count = 0
+
+        # 1. Kiểm tra các bài hát hiện có trong lịch sử (Xóa bài nếu file trên máy đã bị xóa)
+        for item in raw_history:
+            storage_type = item.get("storage_type", "local")
+            if storage_type == "drive":
+                history.append(item)
+                continue
+
+            fp_str = item.get("file_path", "")
+            if not fp_str:
+                removed_count += 1
+                continue
+
+            fp = Path(fp_str.replace("/", "\\"))
+            if fp.is_file():
+                history.append(item)
+            else:
+                # Tìm kiếm lại nếu file bị đổi tên/xóa dấu tiếng Việt
+                found = False
+                parent_dir = fp.parent
+                if parent_dir.is_dir():
+                    target_clean = remove_vietnamese_accents(fp.name).lower()
+                    for f in parent_dir.glob("*.mp3"):
+                        if remove_vietnamese_accents(f.name).lower() == target_clean:
+                            item["file_path"] = str(f.resolve()).replace("\\", "/")
+                            history.append(item)
+                            found = True
+                            break
+                if not found:
+                    # File thực sự không còn trên máy tính -> Loại bỏ khỏi lịch sử!
+                    removed_count += 1
+
         existing_paths = {item.get("file_path", "").lower() for item in history if item.get("file_path")}
         existing_titles = {remove_vietnamese_accents(clean_video_title(item.get("title", ""))).lower().strip() for item in history if item.get("title")}
 
@@ -1726,8 +1760,9 @@ def sync_history():
     return response({
         "status": "success",
         "added_count": added_count,
+        "removed_count": removed_count,
         "history": history,
-        "message": f"Đã đồng bộ {len(history)} bài hát."
+        "message": f"Đã đồng bộ {len(history)} bài hát (Thêm {added_count}, xóa {removed_count} bài không còn trên máy)."
     })
 
 

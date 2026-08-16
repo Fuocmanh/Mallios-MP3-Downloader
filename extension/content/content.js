@@ -1843,8 +1843,9 @@ function doGet(e) {
           const data = await res.json();
           if (data.status === 'success' && data.history) {
             renderHistoryList(data.history);
-            const addedMsg = (data.added_count && data.added_count > 0) ? ` (Thêm mới ${data.added_count} bài)` : '';
-            showStatus(`✅ Đã đồng bộ ${data.history.length} bài hát!${addedMsg}`, '#c2efb3');
+            const addedMsg = (data.added_count && data.added_count > 0) ? ` (+${data.added_count} mới)` : '';
+            const removedMsg = (data.removed_count && data.removed_count > 0) ? ` (-${data.removed_count} đã xóa)` : '';
+            showStatus(`✅ Đã đồng bộ ${data.history.length} bài hát!${addedMsg}${removedMsg}`, '#c2efb3');
           } else {
             showStatus('⚠️ Không thể đồng bộ lịch sử.', '#f2b8b5');
           }

@@ -848,7 +848,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "--output", output_template,
         "--no-playlist",
         "--concurrent-fragments", "10",
-        "--buffer-size", "128K",
+        "--buffer-size", "256K",
         "--http-chunk-size", "10M",
         "--no-mtime",
         "--force-ipv4",
@@ -1294,8 +1294,8 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
                 "skipped": False
             }
             
-    # Giới hạn luồng: 4 luồng cho local (tải cực nhanh), 3 luồng cho Drive (có Semaphore 2)
-    max_workers = 4 if save_target == "local" else 3
+    # Giới hạn luồng: 5 luồng cho local (tải cực nhanh), 3 luồng cho Drive (có Semaphore 2)
+    max_workers = 5 if save_target == "local" else 3
     
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

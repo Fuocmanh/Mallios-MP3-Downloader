@@ -997,6 +997,17 @@ function getFileListOutput() {
       tabSelect.classList.add('active');
       applyTabLayout();
       updateWindowPosition();
+
+      // Tự động quét tức thì từ DOM trang hiện tại nếu danh sách đang trống (< 0.01 giây)
+      if (!currentPlaylistItems || currentPlaylistItems.length === 0) {
+        const domItems = extractPlaylistFromPageDOM();
+        if (domItems && domItems.length > 0) {
+          renderList(domItems);
+          showStatus(`✅ Đã tìm thấy ${domItems.length} bài trên trang!`, '#c2efb3');
+          applyTabLayout();
+          updateWindowPosition();
+        }
+      }
     });
 
     tabHistoryBtn.addEventListener('click', () => {

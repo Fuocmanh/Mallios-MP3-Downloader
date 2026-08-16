@@ -1657,6 +1657,80 @@ def get_history():
     return response({"status": "success", "history": load_history()})
 
 
+@app.route("/sync-history", methods=["POST", "GET", "OPTIONS"])
+def sync_history():
+    if request.method == "OPTIONS":
+        return response({})
+        
+    data = request.get_json(silent=True) or {}
+    custom_path_str = str(data.get("download_path", "")).strip()
+    folders_to_scan = [DEFAULT_DOWNLOAD_FOLDER]
+    if custom_path_str:
+        cp = Path(custom_path_str)
+        if cp.is_dir() and cp != DEFAULT_DOWNLOAD_FOLDER:
+            folders_to_scan.append(cp)
+
+    with HISTORY_LOCK:
+        history = load_history()
+        existing_paths = {item.get("file_path", "").lower() for item in history if item.get("file_path")}
+        existing_titles = {remove_vietnamese_accents(clean_video_title(item.get("title", ""))).lower().strip() for item in history if item.get("title")}
+
+        added_count = 0
+        for folder in folders_to_scan:
+            if not folder.is_dir():
+                continue
+            # Quét tất cả file .mp3 trong thư mục gốc và thư mục con
+            mp3_files = list(folder.glob("*.mp3")) + list(folder.glob("*/*.mp3")) + list(folder.glob("*/*/*.mp3"))
+            for mp3_file in mp3_files:
+                if not mp3_file.is_file():
+                    continue
+                file_path_str = str(mp3_file.resolve()).replace("\\", "/")
+                file_path_lower = file_path_str.lower()
+                clean_title_stem = remove_vietnamese_accents(clean_video_title(mp3_file.stem)).lower().strip()
+
+                if file_path_lower in existing_paths or clean_title_stem in existing_titles:
+                    continue
+
+                uploader = mp3_file.parent.name if mp3_file.parent != folder else "Nghệ sĩ"
+                title = mp3_file.stem
+                try:
+                    relative_path = str(mp3_file.resolve().relative_to(folder.resolve())).replace("\\", "/")
+                except Exception:
+                    relative_path = mp3_file.name
+
+                try:
+                    mtime = int(mp3_file.stat().st_mtime)
+                except Exception:
+                    mtime = int(time.time())
+
+                new_record = {
+                    "video_id": "",
+                    "url": "",
+                    "title": clean_video_title(title),
+                    "uploader": uploader,
+                    "file_path": file_path_str,
+                    "relative_path": relative_path,
+                    "timestamp": mtime,
+                    "storage_type": "local"
+                }
+                history.append(new_record)
+                existing_paths.add(file_path_lower)
+                existing_titles.add(clean_title_stem)
+                added_count += 1
+
+        # Sắp xếp bài mới nhất lên đầu
+        history.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        history = history[:200]
+        save_history(history)
+
+    return response({
+        "status": "success",
+        "added_count": added_count,
+        "history": history,
+        "message": f"Đã đồng bộ {len(history)} bài hát."
+    })
+
+
 @app.route("/play", methods=["GET"])
 def play_audio():
     file_path_str = request.args.get("path")

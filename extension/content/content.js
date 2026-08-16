@@ -205,6 +205,17 @@
    
         <!-- TAB 3 -->
         <div class="yt-mp3-content" id="yt-tab-history">
+          <!-- Toolbar Lịch sử & Nút Đồng bộ -->
+          <div class="yt-history-toolbar">
+            <div style="font-size: 11px; color: #8e9099; display: flex; align-items: center; gap: 4px;">
+              <span>Tổng cộng:</span>
+              <b id="yt-history-total-count" style="color: #a8c7fa;">0 bài</b>
+            </div>
+            <button type="button" id="yt-btn-sync-history" class="yt-history-sync-btn" title="Quét lại toàn bộ file tải trên máy & Drive để đồng bộ chính xác">
+              🔄 Đồng bộ
+            </button>
+          </div>
+
           <!-- Thanh Trình Phát Lịch Sử (History Player Bar với tua nhạc) -->
           <div id="yt-history-player" class="yt-preview-player-bar" style="display: none; margin-top: 0; margin-bottom: 6px;">
             <div class="yt-preview-header">
@@ -1810,8 +1821,41 @@ function doGet(e) {
     const playBtn = document.getElementById('yt-player-play-btn');
     const playerTitle = document.getElementById('yt-player-title');
     const audioElement = document.getElementById('yt-audio-element');
+    const syncHistoryBtn = document.getElementById('yt-btn-sync-history');
+    const historyTotalCount = document.getElementById('yt-history-total-count');
 
     let currentPlayingItem = null;
+
+    if (syncHistoryBtn) {
+      syncHistoryBtn.addEventListener('click', async () => {
+        const origText = syncHistoryBtn.innerHTML;
+        syncHistoryBtn.innerHTML = '⏳ Đang quét...';
+        syncHistoryBtn.disabled = true;
+        showStatus('⏳ Đang đồng bộ và quét lại thư mục nhạc...', '#a8c7fa');
+        
+        try {
+          const res = await apiFetch('/sync-history', {
+            method: 'POST',
+            body: JSON.stringify({
+              download_path: pathInput ? pathInput.value.trim() : ''
+            })
+          });
+          const data = await res.json();
+          if (data.status === 'success' && data.history) {
+            renderHistoryList(data.history);
+            const addedMsg = (data.added_count && data.added_count > 0) ? ` (Thêm mới ${data.added_count} bài)` : '';
+            showStatus(`✅ Đã đồng bộ ${data.history.length} bài hát!${addedMsg}`, '#c2efb3');
+          } else {
+            showStatus('⚠️ Không thể đồng bộ lịch sử.', '#f2b8b5');
+          }
+        } catch (_) {
+          showStatus('❌ Lỗi kết nối khi đồng bộ!', '#f2b8b5');
+        } finally {
+          syncHistoryBtn.innerHTML = origText;
+          syncHistoryBtn.disabled = false;
+        }
+      });
+    }
 
     async function loadHistoryList() {
       try {
@@ -1828,6 +1872,9 @@ function doGet(e) {
     function renderHistoryList(history) {
       const hasHistory = Array.isArray(history) && history.length > 0;
       tabHistory.dataset.historyReady = hasHistory ? 'true' : 'false';
+      if (historyTotalCount) {
+        historyTotalCount.innerText = `${Array.isArray(history) ? history.length : 0} bài`;
+      }
 
       if (!hasHistory) {
         historyList.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #8e9099; text-align: center; font-size: 11px;">Chưa có lịch sử tải nhạc.</div>';

@@ -973,3 +973,42 @@
   height: 13px !important;
   margin: 0 !important;
 }
+
+/* =========================================================
+   TOOLBAR ĐỒNG BỘ LỊCH SỬ
+   ========================================================= */
+
+.yt-history-toolbar {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 6px !important;
+  padding: 2px 4px !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-radius: 6px !important;
+}
+
+.yt-history-sync-btn {
+  background: rgba(168, 199, 250, 0.12) !important;
+  color: #a8c7fa !important;
+  border: 1px solid rgba(168, 199, 250, 0.3) !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  transition: all 0.2s ease !important;
+}
+
+.yt-history-sync-btn:hover {
+  background: rgba(168, 199, 250, 0.25) !important;
+  border-color: #a8c7fa !important;
+  color: #ffffff !important;
+}
+
+.yt-history-sync-btn:active {
+  transform: scale(0.96) !important;
+}

@@ -170,6 +170,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         "yt_mp3_storage_target",
         "yt_mp3_save_path",
         "yt_mp3_quality",
+        "yt_opt_no_subfolder",
         "yt_opt_loudnorm",
         "yt_opt_sponsorblock",
         "yt_opt_thumbnail"
@@ -178,6 +179,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const save_target = settings.yt_mp3_storage_target || "local";
       const download_path = settings.yt_mp3_save_path || "";
       const quality = settings.yt_mp3_quality || "0";
+      const no_subfolder = !!settings.yt_opt_no_subfolder;
       const enable_loudnorm = !!settings.yt_opt_loudnorm;
       const enable_sponsorblock = !!settings.yt_opt_sponsorblock;
       const embed_thumbnail = !!settings.yt_opt_thumbnail;
@@ -190,6 +192,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           quality: quality,
           download_path: download_path,
           save_target: save_target,
+          no_subfolder: no_subfolder,
           enable_loudnorm: enable_loudnorm,
           enable_sponsorblock: enable_sponsorblock,
           embed_thumbnail: embed_thumbnail

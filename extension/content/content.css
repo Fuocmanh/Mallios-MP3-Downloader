@@ -32,11 +32,11 @@
 
 #yt-mp3-window {
   position: fixed;
-  width: 360px;
+  width: 440px;
   min-width: 320px;
-  min-height: 250px;
-  max-width: 800px;
-  max-height: 90vh;
+  min-height: 180px;
+  max-width: 96vw !important;
+  max-height: 97vh !important;
   background: #121318 !important;
   color: #e2e2e9 !important;
   border-radius: 16px;
@@ -110,11 +110,11 @@
 
 .yt-mp3-tab-btn {
   flex: 1 1 0 !important;
-  width: 33.333% !important;
-  max-width: 33.333% !important;
+  width: 25% !important;
+  max-width: 25% !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
-  padding: 7px 5px !important;
+  padding: 7px 4px !important;
   background: transparent !important;
   color: #8e9099 !important;
   border: none !important;
@@ -126,17 +126,17 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 4px !important;
+  gap: 3px !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
 
 .yt-mp3-tab-btn svg {
-  width: 14px !important;
-  height: 14px !important;
-  min-width: 14px !important;
-  max-width: 14px !important;
+  width: 13px !important;
+  height: 13px !important;
+  min-width: 13px !important;
+  max-width: 13px !important;
   flex-shrink: 0 !important;
 }
 
@@ -642,7 +642,7 @@
 #yt-mp3-window #yt-list-container {
   flex: 1 1 auto !important;
   width: 100% !important;
-  min-height: 40px !important; /* Hạ xuống 40px để không bao giờ đẩy nút Tải */
+  min-height: 40px !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
   margin-bottom: 4px !important;
@@ -780,7 +780,8 @@
 
 #yt-mp3-window #yt-tab-quick::-webkit-scrollbar,
 #yt-mp3-window #yt-tab-select::-webkit-scrollbar,
-#yt-mp3-window #yt-tab-history::-webkit-scrollbar { display: none !important; }
+#yt-mp3-window #yt-tab-history::-webkit-scrollbar,
+#yt-mp3-window #yt-tab-settings::-webkit-scrollbar { display: none !important; }
 
 #yt-mp3-window, #yt-mp3-window * { max-width: 100%; }
 
@@ -788,20 +789,22 @@
    LOGIC LAYOUT CỬA SỔ DÙNG DATA-LAYOUT
    ========================================================= */
 
-#yt-mp3-window { max-height: 90vh !important; }
+#yt-mp3-window { max-height: 97vh !important; }
 
 #yt-mp3-window[data-layout="quick"] { height: auto !important; min-height: 0 !important; }
 #yt-mp3-window[data-layout="select-empty"] { height: auto !important; min-height: 0 !important; }
 
 #yt-mp3-window[data-layout="select-rich"] {
-  min-height: min(540px, calc(90vh - 10px)) !important;
+  min-height: min(500px, 94vh) !important;
 }
 #yt-mp3-window[data-layout="select-rich"] #yt-list-section { display: flex !important; }
 
 #yt-mp3-window[data-layout="history-empty"] { height: auto !important; min-height: 0 !important; }
 #yt-mp3-window[data-layout="history-rich"] {
-  min-height: min(540px, calc(90vh - 10px)) !important;
+  min-height: min(500px, 94vh) !important;
 }
+
+#yt-mp3-window[data-layout="settings"] { height: auto !important; min-height: 0 !important; }
 
 /* =========================================================
    STORAGE TOGGLE & GOOGLE DRIVE UI

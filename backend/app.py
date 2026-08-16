@@ -565,9 +565,9 @@ def get_playlist():
             "id": v_id
         })
     
-    # Nạp trước ngầm trong nền TOÀN BỘ danh sách bài hát để khi bấm ▶ bất kỳ bài nào cũng phát tức thì
+    # Nạp trước ngầm tối đa 3 bài đầu tiên để tránh bị YouTube chặn tần suất (Rate-limit)
     try:
-        urls_to_preload = [item["url"] for item in items if item.get("url")]
+        urls_to_preload = [item["url"] for item in items if item.get("url")][:3]
         if urls_to_preload:
             threading.Thread(target=background_preload_streams, args=(urls_to_preload,), daemon=True).start()
     except Exception:
@@ -916,6 +916,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     enable_loudnorm = bool(options.get("enable_loudnorm", False))
     enable_sponsorblock = bool(options.get("enable_sponsorblock", False))
     embed_thumbnail = bool(options.get("embed_thumbnail", False))
+    no_subfolder = bool(options.get("no_subfolder", False))
     
     if CANCEL_REQUESTED:
         with PROGRESS_LOCK:
@@ -969,20 +970,23 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     temp_dl_dir = Path(tempfile.gettempdir()) / "mallios_cache" / f"dl_{state_key}_{int(time.time() * 1000)}_{abs(hash(link)) % 10000}"
     temp_dl_dir.mkdir(parents=True, exist_ok=True)
 
-    postprocessor_args = "ffmpeg:-threads 0 -preset ultrafast"
+    postprocessor_args = "ExtractAudio:-threads 0"
     if enable_loudnorm:
         postprocessor_args += " -af loudnorm=I=-16:TP=-1.5:LRA=11"
 
+    output_template = "%(title)s.%(ext)s" if no_subfolder else "%(uploader)s/%(title)s.%(ext)s"
+
     arguments = [
         "--encoding", "utf-8",
-        "-f", "ba[ext=m4a]/ba[ext=webm]/ba/18/b/best",
+        "--windows-filenames",
+        "-f", "ba/18/b/best",
         "--extract-audio", "--audio-format", "mp3",
         "--audio-quality", quality,
         "--add-metadata",
         "--ffmpeg-location", str(FFMPEG_PATH),
         "--paths", f"temp:{temp_dl_dir}",
         "--paths", f"home:{effective_save_folder}",
-        "--output", "%(uploader)s/%(title)s.%(ext)s",
+        "--output", output_template,
         "--no-playlist",
         "--concurrent-fragments", "10",
         "--buffer-size", "128K",
@@ -1001,7 +1005,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     is_youtube = any(host in link.lower() for host in YOUTUBE_HOSTS)
     if is_youtube:
         arguments.extend([
-            "--extractor-args", "youtube:player_client=android,web"
+            "--extractor-args", "youtube:player_client=android"
         ])
         if enable_sponsorblock:
             arguments.extend([
@@ -1021,7 +1025,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         # Tối đa 2 lượt cho cùng một bài:
         # lượt 1 dùng cookie hiện tại;
         # nếu lỗi xác thực -> refresh browser cookie -> thử lại ngay.
-        # Nếu lỗi rate-limit -> chuyển sang client android độc lập.
+        # Nếu lỗi rate-limit -> chuyển sang client ios/mweb độc lập.
         retried_auth = False
 
         while True:
@@ -1117,9 +1121,9 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                             PARALLEL_PROGRESS[state_key]["status"] = "downloading"
                             PARALLEL_PROGRESS[state_key]["message"] = "Không có browser, thử tải không cookie..."
                         continue
-                elif any(phrase in combined_output for phrase in ["rate-limited", "This content isn't available", "Requested format"]):
+                elif any(phrase in combined_output for phrase in ["rate-limited", "This content isn't available", "Requested format", "403", "Forbidden", "Error opening output files"]):
                     retried_auth = True
-                    # Chuyển sang client Android thuần túy để vượt qua YouTube Rate-Limit
+                    # Chuyển sang format tương thích cao và client dự phòng
                     new_args = []
                     skip_next = False
                     for idx, arg in enumerate(arguments):
@@ -1130,17 +1134,17 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                             skip_next = True
                             continue
                         if arg == "-f":
-                            new_args.extend(["-f", "18/b/ba/best"])
+                            new_args.extend(["-f", "ba/18/b/best"])
                             skip_next = True
                             continue
                         new_args.append(arg)
-                    new_args.extend(["--extractor-args", "youtube:player_client=android"])
+                    new_args.extend(["--extractor-args", "youtube:player_client=android,web", "--sleep-requests", "1"])
                     arguments = new_args
                     with PROGRESS_LOCK:
                         PARALLEL_PROGRESS[state_key]["started"] = False
                         PARALLEL_PROGRESS[state_key]["percent"] = 0.0
                         PARALLEL_PROGRESS[state_key]["status"] = "downloading"
-                        PARALLEL_PROGRESS[state_key]["message"] = "Đang đổi client vượt Rate-Limit YouTube..."
+                        PARALLEL_PROGRESS[state_key]["message"] = "Đang đổi phương thức tải dự phòng..."
                     continue
 
             break
@@ -1434,6 +1438,7 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
                 state_key = f"item_{idx}"
                 fut = executor.submit(run_single_download, link, quality, save_folder, state_key, save_target, options)
                 futures[fut] = state_key
+                time.sleep(0.2)
                 
             while True:
                 all_done = all(fut.done() for fut in futures)
@@ -1542,7 +1547,7 @@ def download():
     global PROGRESS_STATE
     with PROGRESS_LOCK:
         if PROGRESS_STATE["status"] == "running":
-            return response({"status": "error", "message": "Có một tiến trình tải đang chạy. Vui lòng đợi."}, 400)
+            return response({"status": "error", "message": "Có một tiến trình tải đang chạy. V vui lòng đợi."}, 400)
         
         # Reset trạng thái đồng bộ ngay lập tức để tránh tranh chấp (race condition) khi polling
         PROGRESS_STATE["status"] = "running"
@@ -1576,7 +1581,8 @@ def download():
     download_options = {
         "enable_loudnorm": bool(data.get("enable_loudnorm", False)),
         "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
-        "embed_thumbnail": bool(data.get("embed_thumbnail", False))
+        "embed_thumbnail": bool(data.get("embed_thumbnail", False)),
+        "no_subfolder": bool(data.get("no_subfolder", False))
     }
 
     try:
@@ -1627,6 +1633,12 @@ def retry_failed():
     save_folder = requested_folder if requested_folder and requested_folder.is_dir() else DEFAULT_DOWNLOAD_FOLDER
     quality = str(data.get("quality", "0"))
     quality = quality if quality in VALID_QUALITIES else "0"
+    download_options = {
+        "enable_loudnorm": bool(data.get("enable_loudnorm", False)),
+        "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
+        "embed_thumbnail": bool(data.get("embed_thumbnail", False)),
+        "no_subfolder": bool(data.get("no_subfolder", False))
+    }
     
     # Khởi động tải song song cho các link bị lỗi
     with PROGRESS_LOCK:
@@ -1638,7 +1650,7 @@ def retry_failed():
     try:
         thread = threading.Thread(
             target=run_parallel_downloads_background,
-            args=(failed_links, quality, save_folder, len(failed_links), save_target)
+            args=(failed_links, quality, save_folder, len(failed_links), save_target, download_options)
         )
         thread.daemon = True
         thread.start()
@@ -1927,13 +1939,13 @@ def get_direct_stream_url(video_url: str) -> str:
         env["PYTHONIOENCODING"] = "utf-8"
         env["LANG"] = "en_US.UTF-8"
         
-        cmd = [
-            str(YTDLP_PATH),
+        base_cmd = [
             "-g", "-f", "ba/18/b",
             "--extractor-args", "youtube:player_client=android",
             "--no-playlist", "--no-warnings",
             video_url
         ]
+        cmd = [str(YTDLP_PATH), *add_cookie_args(base_cmd)]
         try:
             completed = subprocess.run(
                 cmd,

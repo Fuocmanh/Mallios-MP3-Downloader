@@ -9,6 +9,7 @@
       close: `<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`,
       bolt: `<svg viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C14.4 14.55 12.3 18.15 11 21z"/></svg>`,
       library: `<svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-7l6 3.5-6 3.5z"/></svg>`,
+      gear: `<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`,
       minus: `<svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>`,
       plus: `<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>`,
       download: `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`,
@@ -35,123 +36,31 @@
           <button class="yt-mp3-close" id="yt-mp3-close-btn">${SVG.close}</button>
         </div>
 
-        <div class="yt-mp3-card" style="flex-direction: column; gap: 8px; align-items: stretch; margin-bottom: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #8e9099; font-size: 12px; font-weight: 500;">Nơi lưu trữ:</span>
-            <div class="yt-storage-toggle">
-              <button type="button" class="yt-storage-btn active" id="yt-storage-local-btn" title="Lưu vào máy tính">💻 Máy tính</button>
-              <button type="button" class="yt-storage-btn" id="yt-storage-drive-btn" title="Lưu vào Google Drive">☁️ Drive</button>
-            </div>
-          </div>
-
-          <!-- LOCAL STORAGE BOX -->
-          <div id="yt-local-storage-box">
-            <div class="yt-path-box">
-              <input type="text" id="yt-path-input" placeholder="D:\\Music\\NhacTuyenChon...">
-              <button id="yt-btn-browse" type="button">
-                ${SVG.folder} Chọn
-              </button>
-            </div>
-          </div>
-
-          <!-- GOOGLE DRIVE BOX -->
-          <div id="yt-drive-storage-box" style="display: none;">
-            <div id="yt-drive-not-connected" class="yt-drive-box">
-              <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <span style="color: #c4c6d0; font-size: 11px; font-weight: 500;">Google Apps Script URL:</span>
-                  <button type="button" id="yt-btn-drive-guide" style="background: transparent; border: none; color: #a8c7fa; font-size: 10px; cursor: pointer; text-decoration: underline; padding: 0;">
-                    📖 Hướng dẫn & Mã
-                  </button>
-                </div>
-                <div style="display: flex; gap: 4px; align-items: center;">
-                  <input type="text" id="yt-drive-input-script-url" placeholder="https://script.google.com/macros/s/.../exec" style="background: #282930; border: 1px solid #3c3d45; color: #e2e2e9; padding: 5px 8px; border-radius: 6px; font-size: 10px; flex: 1; min-width: 0; box-sizing: border-box;">
-                  <button type="button" id="yt-btn-drive-connect" class="yt-drive-connect-btn">
-                    🔗 Kết nối
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- APPS SCRIPT GUIDE & CODE MODAL -->
-            <div id="yt-drive-guide-box" class="yt-drive-box" style="display: none; gap: 6px;">
-              <div style="font-size: 11px; font-weight: bold; color: #a8c7fa; display: flex; justify-content: space-between; align-items: center;">
-                <span>Cách tạo link Google Drive (30 giây)</span>
-                <a href="https://script.google.com/home/start" target="_blank" style="color: #a8c7fa; font-size: 10px; text-decoration: underline;">Mở script.google.com ↗</a>
-              </div>
-              <div style="font-size: 9px; color: #c4c6d0; line-height: 1.4;">
-                1. Mở <b>script.google.com</b> ➔ Bấm <b>Dự án mới</b>.<br>
-                2. Dán mã bên dưới ➔ Bấm <b>Triển khai</b> ➔ <b>Tùy chọn triển khai mới</b>.<br>
-                3. Chọn: <b>Ứng dụng web</b> ➔ Quyền truy cập: <b>Bất kỳ ai</b> ➔ Bấm <b>Triển khai</b>.<br>
-                4. Sao chép <b>URL ứng dụng web</b> và dán vào ô trên.
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
-                <button type="button" id="yt-btn-copy-script-code" style="background: #282930; border: 1px solid #3c3d45; color: #c2efb3; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">
-                  📋 Sao chép mã Google Script
-                </button>
-                <button type="button" id="yt-btn-close-guide" style="background: transparent; border: 1px solid #3c3d45; color: #8e9099; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">
-                  Đóng
-                </button>
-              </div>
-            </div>
-            
-            <div id="yt-drive-connected" class="yt-drive-box" style="display: none;">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%;">
-                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                  <span style="color: #c2efb3; font-size: 12px;">✅</span>
-                  <span id="yt-drive-email" style="color: #a8c7fa; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Google Drive Webhook</span>
-                </div>
-                <button type="button" id="yt-btn-drive-logout" class="yt-drive-logout-btn" title="Đổi URL hoặc Ngắt kết nối">
-                  Đổi URL
-                </button>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 10px; color: #8e9099;">
-                <span>Thư mục Drive:</span>
-                <span id="yt-drive-folder-name" style="color: #e2e2e9; font-weight: bold;">Mallios Music</span>
-              </div>
-            </div>
-          </div>
-
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-            <span style="color: #8e9099; font-size: 12px;">Chất lượng nhạc:</span>
-            <select id="yt-quality-select" style="background: #282930; color: #a8c7fa; border: none; padding: 4px 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
-              <option value="0">320 kbps (Cực cao)</option>
-              <option value="2">256 kbps (Thường)</option>
-              <option value="5">128 kbps (Tiết kiệm)</option>
-            </select>
-          </div>
-
-          <!-- TÙY CHỌN ÂM THANH & NÂNG CAO -->
-          <div class="yt-advanced-options-box">
-            <label class="yt-checkbox-label" title="Tự động cân bằng mức âm lượng giữa các bài theo chuẩn EBU R128 (Tốn thêm 2-3s CPU)">
-              <input type="checkbox" id="yt-opt-loudnorm">
-              <span>🎚️ Chuẩn hóa âm lượng (Loudnorm)</span>
-            </label>
-            <label class="yt-checkbox-label" title="Tự động cắt các đoạn quảng cáo, intro tài trợ do tác giả lồng vào video (SponsorBlock)">
-              <input type="checkbox" id="yt-opt-sponsorblock">
-              <span>🛑 Cắt intro / tài trợ (SponsorBlock)</span>
-            </label>
-            <label class="yt-checkbox-label" title="Nhúng ảnh bìa chất lượng cao vào bên trong file MP3">
-              <input type="checkbox" id="yt-opt-thumbnail">
-              <span>🖼️ Nhúng ảnh bìa vào MP3</span>
-            </label>
-          </div>
-        </div>
-
         <div class="yt-mp3-tabs">
           <button class="yt-mp3-tab-btn active" id="yt-tab-quick-btn">${SVG.bolt} Tải Nhanh</button>
           <button class="yt-mp3-tab-btn" id="yt-tab-select-btn">${SVG.library} Chọn Bài</button>
           <button class="yt-mp3-tab-btn" id="yt-tab-history-btn">${SVG.music} Lịch sử</button>
+          <button class="yt-mp3-tab-btn" id="yt-tab-settings-btn">${SVG.gear} Cài Đặt</button>
         </div>
 
-        <!-- TAB 1 -->
+        <!-- TAB 1: TẢI NHANH -->
         <div class="yt-mp3-content active" id="yt-tab-quick">
+          <div class="yt-quick-info-box" style="background: #1e1f25; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05); font-size: 11px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #8e9099;">Nơi lưu trữ:</span>
+              <span id="yt-quick-target-badge" style="color: #a8c7fa; font-weight: 600;">💻 Máy tính</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #8e9099;">Chất lượng:</span>
+              <span id="yt-quick-quality-badge" style="color: #c2efb3; font-weight: 600;">320 kbps (Cực cao)</span>
+            </div>
+          </div>
           <button class="yt-mp3-btn yt-mp3-btn-primary" id="yt-btn-quick-download">
             ${SVG.download} TẢI NGAY MP3
           </button>
         </div>
 
-        <!-- TAB 2 -->
+        <!-- TAB 2: CHỌN BÀI -->
         <div class="yt-mp3-content" id="yt-tab-select">
           <button class="yt-mp3-btn yt-mp3-btn-accent" id="yt-btn-scan">${SVG.search} Quét danh sách bài hát</button>
           
@@ -203,7 +112,7 @@
           </div>
         </div>
    
-        <!-- TAB 3 -->
+        <!-- TAB 3: LỊCH SỬ -->
         <div class="yt-mp3-content" id="yt-tab-history">
           <!-- Toolbar Lịch sử & Nút Đồng bộ -->
           <div class="yt-history-toolbar">
@@ -246,6 +155,116 @@
           </div>
         </div>
 
+        <!-- TAB 4: CÀI ĐẶT -->
+        <div class="yt-mp3-content" id="yt-tab-settings">
+          <div class="yt-mp3-card" style="flex-direction: column; gap: 8px; align-items: stretch; margin-bottom: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #8e9099; font-size: 12px; font-weight: 500;">Nơi lưu trữ:</span>
+              <div class="yt-storage-toggle">
+                <button type="button" class="yt-storage-btn active" id="yt-storage-local-btn" title="Lưu vào máy tính">💻 Máy tính</button>
+                <button type="button" class="yt-storage-btn" id="yt-storage-drive-btn" title="Lưu vào Google Drive">☁️ Drive</button>
+              </div>
+            </div>
+
+            <!-- LOCAL STORAGE BOX -->
+            <div id="yt-local-storage-box">
+              <div class="yt-path-box">
+                <input type="text" id="yt-path-input" placeholder="D:\\Music\\NhacTuyenChon...">
+                <button id="yt-btn-browse" type="button">
+                  ${SVG.folder} Chọn
+                </button>
+              </div>
+            </div>
+
+            <!-- GOOGLE DRIVE BOX -->
+            <div id="yt-drive-storage-box" style="display: none;">
+              <div id="yt-drive-not-connected" class="yt-drive-box">
+                <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="color: #c4c6d0; font-size: 11px; font-weight: 500;">Google Apps Script URL:</span>
+                    <button type="button" id="yt-btn-drive-guide" style="background: transparent; border: none; color: #a8c7fa; font-size: 10px; cursor: pointer; text-decoration: underline; padding: 0;">
+                      📖 Hướng dẫn & Mã
+                    </button>
+                  </div>
+                  <div style="display: flex; gap: 4px; align-items: center;">
+                    <input type="text" id="yt-drive-input-script-url" placeholder="https://script.google.com/macros/s/.../exec" style="background: #282930; border: 1px solid #3c3d45; color: #e2e2e9; padding: 5px 8px; border-radius: 6px; font-size: 10px; flex: 1; min-width: 0; box-sizing: border-box;">
+                    <button type="button" id="yt-btn-drive-connect" class="yt-drive-connect-btn">
+                      🔗 Kết nối
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- APPS SCRIPT GUIDE & CODE MODAL -->
+              <div id="yt-drive-guide-box" class="yt-drive-box" style="display: none; gap: 6px;">
+                <div style="font-size: 11px; font-weight: bold; color: #a8c7fa; display: flex; justify-content: space-between; align-items: center;">
+                  <span>Cách tạo link Google Drive (30 giây)</span>
+                  <a href="https://script.google.com/home/start" target="_blank" style="color: #a8c7fa; font-size: 10px; text-decoration: underline;">Mở script.google.com ↗</a>
+                </div>
+                <div style="font-size: 9px; color: #c4c6d0; line-height: 1.4;">
+                  1. Mở <b>script.google.com</b> ➔ Bấm <b>Dự án mới</b>.<br>
+                  2. Dán mã bên dưới ➔ Bấm <b>Triển khai</b> ➔ <b>Tùy chọn triển khai mới</b>.<br>
+                  3. Chọn: <b>Ứng dụng web</b> ➔ Quyền truy cập: <b>Bất kỳ ai</b> ➔ Bấm <b>Triển khai</b>.<br>
+                  4. Sao chép <b>URL ứng dụng web</b> và dán vào ô trên.
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                  <button type="button" id="yt-btn-copy-script-code" style="background: #282930; border: 1px solid #3c3d45; color: #c2efb3; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">
+                    📋 Sao chép mã Google Script
+                  </button>
+                  <button type="button" id="yt-btn-close-guide" style="background: transparent; border: 1px solid #3c3d45; color: #8e9099; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">
+                    Đóng
+                  </button>
+                </div>
+              </div>
+              
+              <div id="yt-drive-connected" class="yt-drive-box" style="display: none;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%;">
+                  <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                    <span style="color: #c2efb3; font-size: 12px;">✅</span>
+                    <span id="yt-drive-email" style="color: #a8c7fa; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Google Drive Webhook</span>
+                  </div>
+                  <button type="button" id="yt-btn-drive-logout" class="yt-drive-logout-btn" title="Đổi URL hoặc Ngắt kết nối">
+                    Đổi URL
+                  </button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 10px; color: #8e9099;">
+                  <span>Thư mục Drive:</span>
+                  <span id="yt-drive-folder-name" style="color: #e2e2e9; font-weight: bold;">Mallios Music</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+              <span style="color: #8e9099; font-size: 12px;">Chất lượng nhạc:</span>
+              <select id="yt-quality-select" style="background: #282930; color: #a8c7fa; border: none; padding: 4px 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
+                <option value="0">320 kbps (Cực cao)</option>
+                <option value="2">256 kbps (Thường)</option>
+                <option value="5">128 kbps (Tiết kiệm)</option>
+              </select>
+            </div>
+
+            <!-- TÙY CHỌN ÂM THANH & NÂNG CAO -->
+            <div class="yt-advanced-options-box">
+              <label class="yt-checkbox-label" title="Lưu trực tiếp file MP3 vào thư mục chỉ định mà không tạo thư mục con theo tên ca sĩ / kênh">
+                <input type="checkbox" id="yt-opt-no-subfolder">
+                <span>📁 Lưu thẳng vào thư mục (Không tạo thư mục con)</span>
+              </label>
+              <label class="yt-checkbox-label" title="Tự động cân bằng mức âm lượng giữa các bài theo chuẩn EBU R128 (Tốn thêm 2-3s CPU)">
+                <input type="checkbox" id="yt-opt-loudnorm">
+                <span>🎚️ Chuẩn hóa âm lượng (Loudnorm)</span>
+              </label>
+              <label class="yt-checkbox-label" title="Tự động cắt các đoạn quảng cáo, intro tài trợ do tác giả lồng vào video (SponsorBlock)">
+                <input type="checkbox" id="yt-opt-sponsorblock">
+                <span>🛑 Cắt intro / tài trợ (SponsorBlock)</span>
+              </label>
+              <label class="yt-checkbox-label" title="Nhúng ảnh bìa chất lượng cao vào bên trong file MP3">
+                <input type="checkbox" id="yt-opt-thumbnail">
+                <span>🖼️ Nhúng ảnh bìa vào MP3</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div id="yt-mp3-status"></div>
         <div id="yt-duplicate-box" class="yt-duplicate-box" style="display: none;">
           <div id="yt-duplicate-title" class="yt-duplicate-title">Danh sách trùng</div>
@@ -280,21 +299,37 @@
     const tabQuickBtn = document.getElementById('yt-tab-quick-btn');
     const tabSelectBtn = document.getElementById('yt-tab-select-btn');
     const tabHistoryBtn = document.getElementById('yt-tab-history-btn');
+    const tabSettingsBtn = document.getElementById('yt-tab-settings-btn');
     const tabQuick = document.getElementById('yt-tab-quick');
     const tabSelect = document.getElementById('yt-tab-select');
     const tabHistory = document.getElementById('yt-tab-history');
+    const tabSettings = document.getElementById('yt-tab-settings');
 
+    const optNoSubfolder = document.getElementById('yt-opt-no-subfolder');
     const optLoudnorm = document.getElementById('yt-opt-loudnorm');
     const optSponsorBlock = document.getElementById('yt-opt-sponsorblock');
     const optThumbnail = document.getElementById('yt-opt-thumbnail');
     const qualitySelect = document.getElementById('yt-quality-select');
     let currentStorageTarget = localStorage.getItem('yt_mp3_storage_target') || 'local';
 
+    function updateQuickBadges() {
+      const targetBadge = document.getElementById('yt-quick-target-badge');
+      const qualityBadge = document.getElementById('yt-quick-quality-badge');
+      if (targetBadge) {
+        targetBadge.innerText = currentStorageTarget === 'drive' ? '☁️ Google Drive' : '💻 Máy tính';
+      }
+      if (qualityBadge && qualitySelect) {
+        const qText = qualitySelect.options[qualitySelect.selectedIndex]?.text || '320 kbps (Cực cao)';
+        qualityBadge.innerText = qText;
+      }
+    }
+
     function syncSettingsToStorage() {
       const settings = {
         yt_mp3_storage_target: currentStorageTarget,
         yt_mp3_save_path: pathInput ? pathInput.value.trim() : '',
         yt_mp3_quality: qualitySelect ? qualitySelect.value : '0',
+        yt_opt_no_subfolder: optNoSubfolder ? optNoSubfolder.checked : false,
         yt_opt_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         yt_opt_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
         yt_opt_thumbnail: optThumbnail ? optThumbnail.checked : false
@@ -307,19 +342,34 @@
           chrome.storage.local.set(settings);
         }
       } catch (_) {}
+      updateQuickBadges();
     }
 
     if (qualitySelect) {
       qualitySelect.value = localStorage.getItem('yt_mp3_quality') || '0';
       qualitySelect.addEventListener('change', () => syncSettingsToStorage());
     }
+    if (optNoSubfolder) {
+      optNoSubfolder.checked = localStorage.getItem('yt_opt_no_subfolder') === 'true';
+      optNoSubfolder.addEventListener('change', () => syncSettingsToStorage());
+    }
     if (optLoudnorm) {
       optLoudnorm.checked = localStorage.getItem('yt_opt_loudnorm') === 'true';
-      optLoudnorm.addEventListener('change', () => syncSettingsToStorage());
+      optLoudnorm.addEventListener('change', () => {
+        syncSettingsToStorage();
+        if (typeof updateLoudnormState === 'function') {
+          updateLoudnormState(optLoudnorm.checked);
+        }
+      });
     }
     if (optSponsorBlock) {
       optSponsorBlock.checked = localStorage.getItem('yt_opt_sponsorblock') === 'true';
-      optSponsorBlock.addEventListener('change', () => syncSettingsToStorage());
+      optSponsorBlock.addEventListener('change', () => {
+        syncSettingsToStorage();
+        if (typeof updateSponsorBlockState === 'function') {
+          updateSponsorBlockState(optSponsorBlock.checked);
+        }
+      });
     }
     if (optThumbnail) {
       optThumbnail.checked = localStorage.getItem('yt_opt_thumbnail') === 'true';
@@ -331,14 +381,24 @@
 
     function getDownloadOptions() {
       return {
+        no_subfolder: optNoSubfolder ? optNoSubfolder.checked : false,
         enable_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         enable_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
         embed_thumbnail: optThumbnail ? optThumbnail.checked : false
       };
     }
 
-    const savedWidth = localStorage.getItem('yt-mp3-width');
-    const savedHeight = localStorage.getItem('yt-mp3-height');
+    let savedWidth = localStorage.getItem('yt-mp3-width');
+    let savedHeight = localStorage.getItem('yt-mp3-height');
+
+    if (savedWidth && parseInt(savedWidth) < 420) {
+      savedWidth = '420px';
+      localStorage.setItem('yt-mp3-width', savedWidth);
+    }
+    if (savedHeight && parseInt(savedHeight) < 550) {
+      savedHeight = '600px';
+      localStorage.setItem('yt-mp3-height', savedHeight);
+    }
 
     if (savedWidth) win.style.width = savedWidth;
     if (savedHeight) win.style.height = savedHeight;
@@ -374,12 +434,12 @@
       const isLeftHalf = bubbleRect.left < viewportWidth / 2;
 
       let newWidth = isLeftHalf ? startWidth + (e.clientX - startX) : startWidth - (e.clientX - startX);
-      const maxWidth = Math.min(800, viewportWidth - 20);
-      newWidth = Math.max(320, Math.min(maxWidth, newWidth));
+      const maxWidth = Math.min(1400, viewportWidth - 20);
+      newWidth = Math.max(300, Math.min(maxWidth, newWidth));
 
       let newHeight = startHeight + (e.clientY - startY);
 
-      let minHeight = 250;
+      let minHeight = 200;
       const activeBtn = document.querySelector('.yt-mp3-tab-btn.active');
       const activeTabId = activeBtn ? activeBtn.id : 'yt-tab-quick-btn';
 
@@ -387,10 +447,10 @@
       const isHistoryRich = (activeTabId === 'yt-tab-history-btn' && tabHistory && tabHistory.dataset.historyReady === 'true');
 
       if (isSelectRich || isHistoryRich) {
-        minHeight = 400;
+        minHeight = 350;
       }
 
-      const maxHeight = Math.min(800, viewportHeight * 0.9);
+      const maxHeight = Math.min(1400, viewportHeight * 0.97);
       newHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
 
       win.style.width = `${newWidth}px`;
@@ -796,6 +856,7 @@ function getFileListOutput() {
 
     applyStorageTarget(currentStorageTarget);
     checkDriveStatus();
+    updateQuickBadges();
 
     const savedPos = JSON.parse(localStorage.getItem('yt_mp3_bubble_pos') || 'null');
     if (savedPos && typeof savedPos.top === 'number' && typeof savedPos.left === 'number') {
@@ -894,9 +955,11 @@ function getFileListOutput() {
       tabQuickBtn.classList.remove('active');
       tabSelectBtn.classList.remove('active');
       tabHistoryBtn.classList.remove('active');
+      tabSettingsBtn.classList.remove('active');
       tabQuick.classList.remove('active');
       tabSelect.classList.remove('active');
       tabHistory.classList.remove('active');
+      tabSettings.classList.remove('active');
     }
 
     function applyTabLayout() {
@@ -912,6 +975,11 @@ function getFileListOutput() {
       if (tabHistory.classList.contains('active')) {
         const ready = tabHistory.dataset.historyReady === 'true';
         win.dataset.layout = ready ? 'history-rich' : 'history-empty';
+        return;
+      }
+      if (tabSettings.classList.contains('active')) {
+        win.dataset.layout = 'settings';
+        return;
       }
     }
 
@@ -938,6 +1006,14 @@ function getFileListOutput() {
       applyTabLayout();
       updateWindowPosition();
       loadHistoryList();
+    });
+
+    tabSettingsBtn.addEventListener('click', () => {
+      deactivateAllTabs();
+      tabSettingsBtn.classList.add('active');
+      tabSettings.classList.add('active');
+      applyTabLayout();
+      updateWindowPosition();
     });
 
     // const minusBtn = document.getElementById('yt-minus-btn');
@@ -1398,6 +1474,88 @@ function getFileListOutput() {
       }
     });
 
+    // --- SPONSORBLOCK SMART SKIP FOR PREVIEW & PLAYBACK ---
+    const sponsorBlockCache = new Map();
+    let currentPreviewSegments = [];
+    let lastSkippedSegmentEnd = -1;
+
+    function extractVideoId(url) {
+      if (!url) return null;
+      try {
+        if (url.includes('youtu.be/')) {
+          return url.split('youtu.be/')[1].split(/[?&]/)[0].trim();
+        }
+        const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+        return parsed.searchParams.get('v');
+      } catch (_) {
+        const m = url.match(/[?&]v=([^&]+)/);
+        return m ? m[1] : null;
+      }
+    }
+
+    async function fetchSponsorBlockSegments(videoId) {
+      if (!videoId) return [];
+      if (sponsorBlockCache.has(videoId)) {
+        return sponsorBlockCache.get(videoId);
+      }
+      try {
+        const categories = JSON.stringify(["sponsor", "intro", "outro", "music_offtopic", "preview"]);
+        const url = `https://sponsor.ajay.app/api/skipSegments?videoID=${encodeURIComponent(videoId)}&categories=${encodeURIComponent(categories)}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          const segments = (Array.isArray(data) ? data : []).map(seg => ({
+            category: seg.category,
+            start: seg.segment ? seg.segment[0] : 0,
+            end: seg.segment ? seg.segment[1] : 0
+          })).sort((a, b) => a.start - b.start);
+          sponsorBlockCache.set(videoId, segments);
+          return segments;
+        } else {
+          sponsorBlockCache.set(videoId, []);
+          return [];
+        }
+      } catch (_) {
+        sponsorBlockCache.set(videoId, []);
+        return [];
+      }
+    }
+
+    function checkAndSkipSponsorBlock(audioEl, segments, showNotification = true) {
+      if (!audioEl || !segments || segments.length === 0) return;
+      if (!optSponsorBlock || !optSponsorBlock.checked) return;
+
+      const curTime = audioEl.currentTime;
+      for (const seg of segments) {
+        if (curTime >= seg.start - 0.25 && curTime < seg.end - 0.3) {
+          if (lastSkippedSegmentEnd !== seg.end) {
+            lastSkippedSegmentEnd = seg.end;
+            audioEl.currentTime = seg.end;
+            if (showNotification) {
+              showStatus(`⚡ Đã tự động bỏ qua đoạn intro / tài trợ (${formatTime(seg.start)} - ${formatTime(seg.end)})`, '#c2efb3');
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    function updateSponsorBlockState(enabled) {
+      if (enabled && currentPreviewUrl && previewAudio) {
+        const vid = extractVideoId(currentPreviewUrl);
+        if (vid) {
+          fetchSponsorBlockSegments(vid).then(segs => {
+            currentPreviewSegments = segs;
+            checkAndSkipSponsorBlock(previewAudio, segs, true);
+          });
+        }
+      }
+    }
+
+    function updateLoudnormState(enabled) {
+      // Khi tải về máy, Loudnorm được xử lý bằng FFmpeg filter EBU R128 chất lượng cao nhất.
+    }
+
     // --- TRÌNH PHÁT NGHE THỬ ÂM THANH (TAB 2) ---
     const previewBar = document.getElementById('yt-preview-player-bar');
     const previewTitle = document.getElementById('yt-preview-title');
@@ -1460,6 +1618,9 @@ function getFileListOutput() {
       if (!item || !item.url) return;
 
       currentPreviewUrl = item.url;
+      currentPreviewSegments = [];
+      lastSkippedSegmentEnd = -1;
+
       previewTitle.textContent = `${index + 1}. ${item.title}`;
       if (previewBar) previewBar.style.display = 'flex';
       previewCurrentTime.textContent = '00:00';
@@ -1473,6 +1634,24 @@ function getFileListOutput() {
       const allItemDivs = document.querySelectorAll('.yt-mp3-item');
       if (allItemDivs[index]) {
         allItemDivs[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      // Lấy danh sách đoạn cắt SponsorBlock nếu bật
+      const videoId = extractVideoId(item.url);
+      if (videoId && optSponsorBlock && optSponsorBlock.checked) {
+        fetchSponsorBlockSegments(videoId).then(segments => {
+          if (currentPreviewUrl === item.url) {
+            currentPreviewSegments = segments;
+            // Nếu intro bắt đầu từ đầu bài (0s - Xs)
+            if (segments.length > 0 && segments[0].start <= 2.5) {
+              if (previewAudio.currentTime < segments[0].end) {
+                previewAudio.currentTime = segments[0].end;
+                lastSkippedSegmentEnd = segments[0].end;
+                showStatus(`⚡ Bỏ qua intro, phát ngay từ ${formatTime(segments[0].end)}`, '#c2efb3');
+              }
+            }
+          }
+        });
       }
 
       previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
@@ -1561,12 +1740,20 @@ function getFileListOutput() {
           const percent = (previewAudio.currentTime / previewAudio.duration) * 100;
           previewSeekBar.value = percent;
           previewCurrentTime.textContent = formatTime(previewAudio.currentTime);
+          checkAndSkipSponsorBlock(previewAudio, currentPreviewSegments, true);
         }
       });
 
       previewAudio.addEventListener('loadedmetadata', () => {
         if (previewAudio.duration) {
           previewTotalTime.textContent = formatTime(previewAudio.duration);
+        }
+        // Kiểm tra lại đoạn intro nếu tải xong metadata
+        if (currentPreviewSegments && currentPreviewSegments.length > 0) {
+          if (currentPreviewSegments[0].start <= 2.5 && previewAudio.currentTime < currentPreviewSegments[0].end) {
+            previewAudio.currentTime = currentPreviewSegments[0].end;
+            lastSkippedSegmentEnd = currentPreviewSegments[0].end;
+          }
         }
       });
 
@@ -1709,10 +1896,15 @@ function getFileListOutput() {
 
     function renderList(items) {
       const container = document.getElementById('yt-list-container');
-      const selectAllBtn = document.getElementById('yt-select-all');
       tabSelect.dataset.listReady = 'true';
       document.getElementById('yt-list-section').style.display = 'flex';
       if (playlistSearchBox) playlistSearchBox.style.display = 'flex';
+      applyTabLayout();
+      const curSavedHeight = localStorage.getItem('yt-mp3-height');
+      if (!curSavedHeight || parseInt(curSavedHeight) < 650) {
+        win.style.height = `${Math.min(750, Math.round(window.innerHeight * 0.92))}px`;
+      }
+      updateWindowPosition();
       container.innerHTML = '';
 
       const uniqueItems = [];
@@ -2255,6 +2447,12 @@ function getFileListOutput() {
           audioElement.src = `${API_BASE_URL}/play?path=${encodeURIComponent(item.file_path)}`;
         }
         
+        const dsp = getOrCreateAudioDSP(audioElement);
+        if (dsp) {
+          dsp.resume();
+          dsp.applyState(optLoudnorm ? optLoudnorm.checked : false);
+        }
+
         audioElement.load();
         audioElement.play().catch(err => {
           console.warn("Lỗi phát audio local, fallback stream:", err);

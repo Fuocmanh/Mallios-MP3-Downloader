@@ -728,9 +728,15 @@ def clean_video_title(title: str) -> str:
     return title.strip()
 
 
+def normalize_title_for_check(text: str) -> str:
+    """Chuẩn hóa tiêu đề bài hát / tên file (xóa đuôi .mp3, rác, dấu tiếng Việt, đưa về chữ thường) để so sánh trùng lặp."""
+    clean = clean_video_title(str(text).replace(".mp3", ""))
+    return remove_vietnamese_accents(clean).lower().strip()
+
+
 def find_duplicate_file(save_folder: Path, clean_title: str) -> Path | None:
     # clean_title là tên file đã xóa dấu và làm sạch, ví dụ: "Hay Trao Cho Anh.mp3"
-    target_stem = remove_vietnamese_accents(clean_video_title(clean_title.replace(".mp3", ""))).lower().strip()
+    target_stem = normalize_title_for_check(clean_title)
     
     try:
         # Quét các file ở thư mục gốc và thư mục con cấp 1
@@ -738,7 +744,7 @@ def find_duplicate_file(save_folder: Path, clean_title: str) -> Path | None:
         for f in files:
             if f.is_file():
                 # Làm sạch và xóa dấu tên file trên đĩa để so sánh
-                disk_stem = remove_vietnamese_accents(clean_video_title(f.stem)).lower().strip()
+                disk_stem = normalize_title_for_check(f.stem)
                 
                 # 1. So sánh khớp hoàn toàn (không phân biệt hoa thường, có dấu hay không dấu)
                 if disk_stem == target_stem:
@@ -746,6 +752,10 @@ def find_duplicate_file(save_folder: Path, clean_title: str) -> Path | None:
                     
                 # 2. Hỗ trợ trường hợp file trên đĩa có/không có tên ca sĩ ghép vào (ví dụ: "Son Tung M-TP - Hay Trao Cho Anh" vs "Hay Trao Cho Anh")
                 # Xóa phần tên ca sĩ phía trước nếu có dấu gạch ngang " - "
+                if " - " in disk_stem and disk_stem.split(" - ", 1)[1].strip() == target_stem:
+                    return f
+                if " - " in target_stem and target_stem.split(" - ", 1)[1].strip() == disk_stem:
+                    return f
     except Exception:
         pass
         
@@ -771,7 +781,7 @@ def extract_youtube_video_id(url: str) -> str:
 
 
 def get_duplicate_file_matches(save_folder: Path, clean_title: str) -> list[Path]:
-    target_stem = remove_vietnamese_accents(clean_video_title(clean_title.replace(".mp3", ""))).lower().strip()
+    target_stem = normalize_title_for_check(clean_title)
     matches: list[Path] = []
 
     try:
@@ -780,7 +790,7 @@ def get_duplicate_file_matches(save_folder: Path, clean_title: str) -> list[Path
             if not f.is_file():
                 continue
 
-            disk_stem = remove_vietnamese_accents(clean_video_title(f.stem)).lower().strip()
+            disk_stem = normalize_title_for_check(f.stem)
             if disk_stem == target_stem:
                 matches.append(f)
     except Exception:
@@ -2228,22 +2238,23 @@ def check_duplicates_batch():
     requested_folder = Path(raw_folder) if raw_folder else None
     save_folder = requested_folder if requested_folder and requested_folder.is_dir() else DEFAULT_DOWNLOAD_FOLDER
     history_records = load_history()
-    history_urls = {
-        item.get("url", "").split("&")[0].strip()
-        for item in history_records
-        if item.get("url")
-    }
 
     results = {}
     if save_target == "drive":
-        drive_history_urls = {
-            item.get("url", "").split("&")[0].strip()
-            for item in history_records
-            if item.get("storage_type") == "drive" and item.get("url")
-        }
+        drive_history_urls = set()
+        drive_history_vids = set()
+        for item in history_records:
+            if item.get("storage_type") == "drive":
+                u = item.get("url", "")
+                if u:
+                    drive_history_urls.add(u.split("&")[0].strip())
+                vid = item.get("video_id") or extract_youtube_video_id(u)
+                if vid:
+                    drive_history_vids.add(vid)
         for u in urls:
             norm_u = u.split("&")[0].strip()
-            results[u] = norm_u in drive_history_urls
+            vid = extract_youtube_video_id(u)
+            results[u] = (norm_u in drive_history_urls) or (bool(vid) and vid in drive_history_vids)
         return response({"status": "success", "duplicates": results})
 
     # Nếu lưu trên máy, kết hợp quét lịch sử và quét file thực tế trên ổ cứng
@@ -2258,9 +2269,21 @@ def check_duplicates_batch():
         except Exception:
             pass
 
+    history_local_urls = set()
+    history_local_vids = set()
+    for item in history_records:
+        if item.get("storage_type", "local") == "local":
+            u = item.get("url", "")
+            if u:
+                history_local_urls.add(u.split("&")[0].strip())
+            vid = item.get("video_id") or extract_youtube_video_id(u)
+            if vid:
+                history_local_vids.add(vid)
+
     for u in urls:
         norm_u = u.split("&")[0].strip()
-        is_dup = norm_u in history_urls
+        vid = extract_youtube_video_id(u)
+        is_dup = (norm_u in history_local_urls) or (bool(vid) and vid in history_local_vids)
         results[u] = is_dup
 
     return response({"status": "success", "duplicates": results})

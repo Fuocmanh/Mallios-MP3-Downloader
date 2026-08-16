@@ -1328,9 +1328,32 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
             except Exception:
                 pass
                 
+        if 'process' in locals() and process:
+            try:
+                if process.poll() is None:
+                    subprocess.run(
+                        f"taskkill /F /T /PID {process.pid}",
+                        shell=True,
+                        creationflags=CREATE_NO_WINDOW,
+                        capture_output=True
+                    )
+                    process.kill()
+            except Exception:
+                pass
+
         with ACTIVE_PROCESSES_LOCK:
             if state_key in ACTIVE_PROCESSES:
                 del ACTIVE_PROCESSES[state_key]
+
+
+def cleanup_orphaned_processes():
+    """Tự động End Task toàn bộ các tiến trình yt-dlp/ffmpeg/aria2c mồ côi khi đã xong lượt tải."""
+    try:
+        subprocess.run("taskkill /F /IM yt-dlp.exe /T", shell=True, creationflags=CREATE_NO_WINDOW, capture_output=True)
+        subprocess.run("taskkill /F /IM aria2c.exe /T", shell=True, creationflags=CREATE_NO_WINDOW, capture_output=True)
+        subprocess.run("taskkill /F /IM ffmpeg.exe /T", shell=True, creationflags=CREATE_NO_WINDOW, capture_output=True)
+    except Exception:
+        pass
 
 
 def cleanup_stray_temp_folders(folder: Path):
@@ -1489,6 +1512,9 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
             PROGRESS_STATE["error"] = str(error)
             PROGRESS_STATE["message"] = "Quá trình tải song song gặp lỗi."
     finally:
+        with ACTIVE_PROCESSES_LOCK:
+            ACTIVE_PROCESSES.clear()
+        cleanup_orphaned_processes()
         cleanup_stray_temp_folders(save_folder)
         cleanup_stray_temp_folders(DEFAULT_DOWNLOAD_FOLDER)
 
@@ -1643,6 +1669,7 @@ def cancel_downloads():
             except Exception:
                 pass
         ACTIVE_PROCESSES.clear()
+    cleanup_orphaned_processes()
         
     with PROGRESS_LOCK:
         # Đánh dấu các tiến trình chưa xong là cancelled
@@ -2252,6 +2279,7 @@ if __name__ == "__main__":
     if sys.stderr is None:
         sys.stderr = open(LOGS_DIR / "error.log", "a", encoding="utf-8")
     try:
+        cleanup_orphaned_processes()
         app.run(host="0.0.0.0", port=37491, threaded=True, use_reloader=False)
     except Exception as e:
         with open(LOGS_DIR / "error.log", "w", encoding="utf-8") as f:

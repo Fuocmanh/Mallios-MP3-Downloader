@@ -1,0 +1,55 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Thông tin bảo mật & Token cá nhân (Tuyệt đối không đẩy lên Git)
+configs/cookies.txt
+configs/drive_auth.json
+configs/drive_config.json
+
+# Lịch sử & Dữ liệu cục bộ
+configs/history.json
+configs/history.json.bak
+configs/history.json.tmp
+*.bak
+*.tmp
+links_temp.txt
+
+# File mẫu được phép đẩy lên Git
+!configs/*.example.json
+!configs/.gitkeep
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Thư mục tải về (giữ cấu trúc nhưng bỏ file mp3)
+downloads/*
+!downloads/.gitkeep
+
+# Tools (giữ cấu trúc thư mục nhưng không đẩy file exe)
+tools/*
+!tools/.gitkeep
+
+# File nén & Runtimes nặng
+runtime/
+Mallios.rar
+*.rar
+*.zip
+*.7z
+
+# Native Host build output
+native-host/MalliosNativeHost.exe
+native-host/com.mallios.mp3.installed.json

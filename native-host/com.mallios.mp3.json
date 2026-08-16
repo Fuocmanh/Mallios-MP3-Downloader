@@ -1,0 +1,9 @@
+{
+  "name": "com.mallios.mp3",
+  "description": "Starts the Mallios local server when Chrome requests it.",
+  "path": "__NATIVE_HOST_PATH__",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://ejbmglcdgkjndmficeeejojlejaignmm/"
+  ]
+}

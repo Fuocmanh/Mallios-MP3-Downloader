@@ -427,9 +427,9 @@ def upload_bytes_via_apps_script(
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as e:
             last_error = e
             if attempt < max_retries:
-                backoff_time = attempt * 2  # 2s, 4s, 6s
+                backoff_time = 1  # 1s nhanh gọn
                 if progress_callback:
-                    progress_callback(97.0, f"Mạng bận, đang thử lại sau {backoff_time}s...")
+                    progress_callback(97.0, "Mạng bận, đang thử lại...")
                 time.sleep(backoff_time)
             else:
                 if isinstance(e, urllib.error.HTTPError):

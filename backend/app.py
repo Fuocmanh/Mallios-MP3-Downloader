@@ -962,7 +962,6 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "-f", "ba[ext=m4a]/ba[ext=webm]/ba/18/b/best",
         "--extract-audio", "--audio-format", "mp3",
         "--audio-quality", quality,
-        "--embed-thumbnail",
         "--add-metadata",
         "--ffmpeg-location", str(FFMPEG_PATH),
         "--paths", str(effective_save_folder),
@@ -972,7 +971,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "--buffer-size", "128K",
         "--http-chunk-size", "10M",
         "--no-mtime",
-        "--postprocessor-args", "ffmpeg:-threads 0 -preset ultrafast -af loudnorm=I=-16:TP=-1.5:LRA=11"
+        "--postprocessor-args", "ffmpeg:-threads 0 -preset ultrafast"
     ]
     
     is_youtube = any(host in link.lower() for host in YOUTUBE_HOSTS)
@@ -1348,8 +1347,8 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
                 "skipped": False
             }
             
-    # Giới hạn song song tối đa là 3 bài (mỗi bài 8 luồng = 24 luồng tối ưu băng thông)
-    max_workers = 3
+    # Giới hạn luồng: 4 luồng cho local (tải cực nhanh), 3 luồng cho Drive (có Semaphore 2)
+    max_workers = 4 if save_target == "local" else 3
     
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -1371,7 +1370,7 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
                         total_percent += state["percent"]
                         if state["status"] == "completed":
                             completed_count += 1
-                        elif state["status"] == "downloading" or state["started"]:
+                        elif state["status"] in {"downloading", "converting", "uploading"}:
                             active_downloading.append(state_key)
                             
                     avg_percent = total_percent / total_files

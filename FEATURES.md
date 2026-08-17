@@ -1,4 +1,4 @@
-# Chi Tiết Tính Năng Mallios MP3 Downloader (v3.6)
+# Chi Tiết Tính Năng Mallios MP3 Downloader (v3.7)
 
 Tài liệu này mô tả toàn diện và chi tiết tất cả các tính năng, kiến trúc kỹ thuật và cơ chế vận hành của hệ thống **Mallios MP3 Downloader**.
 

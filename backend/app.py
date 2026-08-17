@@ -55,6 +55,7 @@ TOOLS_DIR = PROJECT_ROOT / "tools"
 FFMPEG_PATH = TOOLS_DIR
 YTDLP_PATH = TOOLS_DIR / "yt-dlp.exe"
 ARIA2C_PATH = TOOLS_DIR / "aria2c.exe"
+FOLDER_PICKER_EXE = TOOLS_DIR / "FolderPicker.exe"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 VALID_QUALITIES = {"0", "2", "5"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
@@ -309,7 +310,21 @@ def run_ytdlp(arguments: list[str]) -> subprocess.CompletedProcess[str]:
 @app.route("/", methods=["GET"])
 @app.route("/api/status", methods=["GET"])
 def status():
-    return response({"status": "online", "message": "Mallios MP3 server đang chạy."})
+    return response({
+        "status": "online",
+        "message": "Mallios MP3 server đang chạy.",
+        "default_folder": str(DEFAULT_DOWNLOAD_FOLDER)
+    })
+
+
+@app.route("/api/default-folder", methods=["GET", "OPTIONS"])
+def default_folder():
+    if request.method == "OPTIONS":
+        return response({"status": "ok"})
+    return response({
+        "status": "success",
+        "default_folder": str(DEFAULT_DOWNLOAD_FOLDER)
+    })
 
 
 @app.route("/select-folder", methods=["POST", "OPTIONS"])
@@ -317,81 +332,115 @@ def select_folder():
     if request.method == "OPTIONS":
         return response({})
 
-    # Windows FolderBrowserDialog - chọn thư mục nhanh chóng, không tốn thời gian compile
-    script = r"""
-Add-Type -AssemblyName System.Windows.Forms
-$fbd = New-Object System.Windows.Forms.FolderBrowserDialog
-$fbd.Description = 'Chọn thư mục lưu nhạc MP3'
-$fbd.ShowNewFolderButton = $true
-$form = New-Object System.Windows.Forms.Form
-$form.TopMost = $true
-$form.Width = 1
-$form.Height = 1
-$form.ShowInTaskbar = $false
-$form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
-$form.Opacity = 0
+    req_data = request.get_json(silent=True) or {}
+    initial_path = str(req_data.get("initial_path", "")).strip()
+    title = str(req_data.get("title", "Chọn thư mục lưu nhạc MP3")).strip()
 
-try {
-    $form.Show()
-    $form.Activate()
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
-    if ($fbd.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
-        Write-Output $fbd.SelectedPath
-    }
-}
-finally {
-    $form.Close()
-    $form.Dispose()
-    $fbd.Dispose()
-}
-"""
+    # Tier 1: Sử dụng FolderPicker.exe hiện đại chuẩn Windows Explorer (IFileOpenDialog / FOS_PICKFOLDERS)
+    if os.name == "nt" and FOLDER_PICKER_EXE.is_file():
+        try:
+            completed = subprocess.run(
+                [str(FOLDER_PICKER_EXE), title, initial_path or str(DEFAULT_DOWNLOAD_FOLDER)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=180,
+                creationflags=CREATE_NO_WINDOW
+            )
+            folder = completed.stdout.strip()
+            if folder and os.path.exists(folder):
+                return response({"status": "success", "path": str(Path(folder))})
+            elif completed.returncode == 0:
+                return response({"status": "cancel", "message": "Chưa chọn thư mục."})
+        except Exception:
+            pass
 
+    # Tier 2: PowerShell IFileOpenDialog hiện đại
+    if os.name == "nt":
+        try:
+            clean_title = title.replace('"', '\\"')
+            clean_init = initial_path.replace('"', '\\"') if (initial_path and os.path.exists(initial_path)) else str(DEFAULT_DOWNLOAD_FOLDER).replace('"', '\\"')
+            ps_code = f"""
+            $code = @"
+            using System;
+            using System.Runtime.InteropServices;
+            public class MPicker {{
+                [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+                private static extern int SHCreateItemFromParsingName([MarshalAs(UnmanagedType.LPWStr)] string pszPath, IntPtr pbc, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItem ppv);
+                [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7"), ClassInterface(ClassInterfaceType.None)]
+                private class FileOpenDialogRCW {{ }}
+                [ComImport, Guid("d57c5270-705d-44e8-83d7-f421f640e1bd"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+                private interface IFileOpenDialog {{
+                    [PreserveSig] int Show(IntPtr parent);
+                    void SetFileTypes(); void SetFileTypeIndex(); void GetFileTypeIndex(); void Advise(); void Unadvise();
+                    void SetOptions(uint fos); void GetOptions(out uint fos); void SetDefaultFolder(IShellItem psi); void SetFolder(IShellItem psi);
+                    void GetFolder(out IShellItem ppsi); void GetCurrentSelection(out IShellItem ppsi);
+                    void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName); void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
+                    void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle); void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
+                    void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel); void GetResult(out IShellItem ppsi);
+                    void AddPlace(IShellItem psi, int alignment); void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
+                    void Close(int hr); void SetClientGuid(ref Guid guid); void ClearClientData(); void SetFilter([MarshalAs(UnmanagedType.Interface)] object pFilter);
+                    void GetResults(out IntPtr ppenum); void GetSelectedItems(out IntPtr ppsai);
+                }}
+                [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+                private interface IShellItem {{
+                    void BindToHandler(); void GetParent(); void GetDisplayName(uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
+                    void GetAttributes(); void Compare();
+                }}
+                public static string Pick(string t, string init) {{
+                    var d = (IFileOpenDialog)new FileOpenDialogRCW();
+                    d.SetOptions(0x20 | 0x40);
+                    if (!string.IsNullOrEmpty(t)) d.SetTitle(t);
+                    if (!string.IsNullOrEmpty(init) && System.IO.Directory.Exists(init)) {{
+                        var iid = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
+                        IShellItem item;
+                        if (SHCreateItemFromParsingName(init, IntPtr.Zero, ref iid, out item) == 0) d.SetFolder(item);
+                    }}
+                    if (d.Show(IntPtr.Zero) == 0) {{
+                        IShellItem res; d.GetResult(out res);
+                        if (res != null) {{ string p; res.GetDisplayName(0x80058000, out p); return p; }}
+                    }}
+                    return "";
+                }}
+            }}
+            "@
+            Add-Type -TypeDefinition $code -Language CSharp
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+            Write-Output ([MPicker]::Pick("{clean_title}", "{clean_init}"))
+            """
+            completed = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_code],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=180,
+                creationflags=CREATE_NO_WINDOW
+            )
+            folder = completed.stdout.strip()
+            if folder and os.path.exists(folder):
+                return response({"status": "success", "path": str(Path(folder))})
+            elif completed.returncode == 0:
+                return response({"status": "cancel", "message": "Chưa chọn thư mục."})
+        except Exception:
+            pass
+
+    # Tier 3: Fallback qua Tkinter
     try:
-        completed = subprocess.run(
-            ["powershell", "-NoProfile", "-Sta", "-Command", script],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            creationflags=CREATE_NO_WINDOW,
-            timeout=120,
-            check=False,
-        )
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        folder = filedialog.askdirectory(title=title, initialdir=initial_path or str(DEFAULT_DOWNLOAD_FOLDER))
+        root.destroy()
+        if folder and os.path.exists(folder):
+            return response({"status": "success", "path": str(Path(folder))})
+    except Exception:
+        pass
 
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return response(
-            {
-                "status": "error",
-                "message": str(error)
-            },
-            500
-        )
-
-    folder = completed.stdout.strip()
-
-    if folder:
-        return response(
-            {
-                "status": "success",
-                "path": str(Path(folder))
-            }
-        )
-
-    if completed.returncode != 0 and completed.stderr.strip():
-        return response(
-            {
-                "status": "error",
-                "message": completed.stderr.strip()
-            },
-            500
-        )
-
-    return response(
-        {
-            "status": "cancel",
-            "message": "Chưa chọn thư mục."
-        }
-    )
+    return response({"status": "cancel", "message": "Chưa chọn thư mục."})
 
 @app.route("/get-playlist", methods=["POST", "OPTIONS"])
 def get_playlist():
@@ -855,6 +904,8 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         "--paths", f"home:{effective_save_folder}",
         "--output", output_template,
         "--no-playlist",
+        "--newline",
+        "--no-color",
         "--concurrent-fragments", "10",
         "--buffer-size", "256K",
         "--http-chunk-size", "10M",
@@ -1055,16 +1106,16 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                                     final_parent = clean_parent
                                 else:
                                     # Thêm cơ chế thử lại để tránh lỗi khóa tệp tạm thời trên Windows
-                                    for attempt in range(5):
+                                    for attempt in range(10):
                                         try:
                                             original_parent.rename(clean_parent)
                                             final_parent = clean_parent
                                             # Cập nhật đường dẫn tệp sau khi thư mục cha bị đổi tên (tránh WinError 3)
                                             original_file = final_parent / original_file.name
                                             break
-                                        except PermissionError:
-                                            if attempt < 4:
-                                                time.sleep(0.1)
+                                        except (PermissionError, OSError):
+                                            if attempt < 9:
+                                                time.sleep(1.0)
                                             else:
                                                 raise
                                         
@@ -1076,14 +1127,14 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                                     except Exception:
                                         pass
                                 
-                                # Thêm cơ chế thử lại đổi tên tệp (tránh WinError 32)
-                                for attempt in range(5):
+                                # Thêm cơ chế thử lại đổi tên tệp (tránh WinError 32 và WinError 5)
+                                for attempt in range(10):
                                     try:
                                         original_file.rename(final_file_path)
                                         break
-                                    except PermissionError:
-                                        if attempt < 4:
-                                            time.sleep(0.1)
+                                    except (PermissionError, OSError):
+                                        if attempt < 9:
+                                            time.sleep(1.0)
                                         else:
                                             raise
                                 

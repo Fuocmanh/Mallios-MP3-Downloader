@@ -23,7 +23,44 @@
     container.id = 'yt-mp3-root';
     container.innerHTML = `
       <div id="yt-mp3-bubble" title="Bấm để mở MP3 Downloader">
-        ${SVG.music}
+        <!-- Sóng âm Ripple (Ý tưởng 3) -->
+        <div class="yt-bubble-ripple ripple-1"></div>
+        <div class="yt-bubble-ripple ripple-2"></div>
+
+        <!-- Vòng tròn tiến trình tải SVG (Ý tưởng 1) -->
+        <svg class="yt-bubble-progress-svg" viewBox="0 0 56 56">
+          <circle class="yt-bubble-progress-bg" cx="28" cy="28" r="25" />
+          <circle class="yt-bubble-progress-bar" id="yt-bubble-progress-circle" cx="28" cy="28" r="25" />
+        </svg>
+
+        <!-- Icon trung tâm -->
+        <div class="yt-bubble-icon-wrap" id="yt-bubble-icon-wrap">
+          <span class="yt-bubble-icon yt-bubble-icon-idle">${SVG.music}</span>
+          <span class="yt-bubble-icon yt-bubble-icon-disc" id="yt-bubble-disc">💿</span>
+          <!-- Trạng thái tải: Hiển thị mũi tên tải + số % to rõ nét -->
+          <div class="yt-bubble-icon yt-bubble-icon-dl" id="yt-bubble-dl-box">
+            <span class="yt-bubble-dl-arrow">${SVG.download}</span>
+            <span class="yt-bubble-dl-pct" id="yt-bubble-dl-pct">0%</span>
+          </div>
+        </div>
+
+        <!-- Huy hiệu % nhỏ khi vừa nghe nhạc vừa tải -->
+        <span class="yt-bubble-dl-badge" id="yt-bubble-dl-badge">0%</span>
+
+        <!-- Mini Dynamic Island Capsule (Ý tưởng 2 - Khi rê chuột) -->
+        <div class="yt-bubble-island" id="yt-bubble-island">
+          <span class="yt-bubble-island-disc" id="yt-bubble-island-icon">💿</span>
+          <div class="yt-bubble-island-info">
+            <span class="yt-bubble-island-title" id="yt-bubble-island-title">Đang phát bài hát...</span>
+            <div class="yt-bubble-island-progress-track" id="yt-bubble-island-track" style="display: none;">
+              <div class="yt-bubble-island-progress-fill" id="yt-bubble-island-fill"></div>
+            </div>
+          </div>
+          <div class="yt-bubble-island-actions" id="yt-bubble-island-actions">
+            <button type="button" id="yt-bubble-island-play" class="yt-bubble-island-btn" title="Phát / Tạm dừng">⏸</button>
+            <button type="button" id="yt-bubble-island-next" class="yt-bubble-island-btn" title="Bài tiếp theo">⏭</button>
+          </div>
+        </div>
       </div>
 
       <div id="yt-mp3-window">
@@ -64,30 +101,33 @@
         <div class="yt-mp3-content" id="yt-tab-select">
           <button class="yt-mp3-btn yt-mp3-btn-accent" id="yt-btn-scan">${SVG.search} Quét danh sách bài hát</button>
           
-          <!-- Thanh Nghe Thử Trực Tiếp (Preview Player Bar) -->
+          <!-- Thanh Nghe Thử Trực Tiếp (Preview Player Bar Spotify Style) -->
           <div id="yt-preview-player-bar" class="yt-preview-player-bar" style="display: none;">
             <div class="yt-preview-header">
               <div class="yt-preview-title-box">
-                <span class="yt-preview-anim-disc">🎵</span>
+                <span class="yt-preview-anim-disc" id="yt-preview-disc">🎵</span>
                 <span id="yt-preview-title" class="yt-preview-title">Đang phát bài hát...</span>
               </div>
-              <div style="display: flex; align-items: center; gap: 4px; flex: 0 0 auto;">
+              <div class="yt-preview-header-actions">
                 <div class="yt-volume-box">
-                  <button type="button" id="yt-preview-vol-btn" class="yt-volume-btn" title="Bật / Tắt tiếng">🔊</button>
+                  <button type="button" id="yt-preview-vol-btn" class="yt-volume-btn" title="Bật / Tắt tiếng (M)">🔊</button>
                   <input type="range" id="yt-preview-vol-slider" class="yt-volume-slider" min="0" max="1" step="0.05" value="1" title="Âm lượng">
                 </div>
-                <button type="button" id="yt-preview-autoplay-btn" class="yt-preview-autoplay-btn active" title="Tự động phát bài tiếp theo (Đang Bật)">
-                  🔁 Tự phát
-                </button>
+                <button type="button" id="yt-preview-speed-btn" class="yt-speed-btn" title="Tốc độ phát: 1x (Bấm để đổi)">⚡ 1x</button>
                 <button type="button" id="yt-preview-close-btn" class="yt-preview-close-btn" title="Đóng nghe thử">✕</button>
               </div>
             </div>
             <div class="yt-preview-controls">
+              <button type="button" id="yt-preview-shuffle-btn" class="yt-preview-ctrl-btn off" title="Phát ngẫu nhiên (S)">🔀</button>
               <button type="button" id="yt-preview-prev-btn" class="yt-preview-nav-btn" title="Bài trước (⏮) hoặc Phím P">⏮</button>
               <button type="button" id="yt-preview-toggle-btn" class="yt-preview-toggle-btn" title="Phát / Tạm dừng (Space)">▶</button>
               <button type="button" id="yt-preview-next-btn" class="yt-preview-nav-btn" title="Bài tiếp theo (⏭) hoặc Phím N">⏭</button>
+              <button type="button" id="yt-preview-repeat-btn" class="yt-preview-ctrl-btn active" title="Chế độ lặp lại (R): Lặp danh sách">🔁</button>
               <span id="yt-preview-current-time" class="yt-preview-time">00:00</span>
-              <input type="range" id="yt-preview-seek-bar" class="yt-preview-seek-bar" min="0" max="100" value="0" step="0.1">
+              <div class="yt-seek-wrap">
+                <input type="range" id="yt-preview-seek-bar" class="yt-preview-seek-bar" min="0" max="100" value="0" step="0.1">
+                <div id="yt-preview-seek-tooltip" class="yt-seek-tooltip" style="display: none;">00:00</div>
+              </div>
               <span id="yt-preview-total-time" class="yt-preview-time">00:00</span>
             </div>
             <audio id="yt-preview-audio-element" style="display: none;"></audio>
@@ -125,26 +165,33 @@
             </button>
           </div>
 
-          <!-- Thanh Trình Phát Lịch Sử (History Player Bar với tua nhạc) -->
+          <!-- Thanh Trình Phát Lịch Sử (History Player Bar Spotify Style) -->
           <div id="yt-history-player" class="yt-preview-player-bar" style="display: none; margin-top: 0; margin-bottom: 6px;">
             <div class="yt-preview-header">
               <div class="yt-preview-title-box">
-                <span class="yt-preview-anim-disc">🎧</span>
+                <span class="yt-preview-anim-disc" id="yt-history-disc">🎧</span>
                 <span id="yt-player-title" class="yt-preview-title">Tên bài hát</span>
               </div>
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <button type="button" id="yt-history-autoplay-btn" class="yt-preview-autoplay-btn active" title="Tự động phát bài tiếp trong Lịch sử">
-                  🔁 Tự phát
-                </button>
+              <div class="yt-preview-header-actions">
+                <div class="yt-volume-box">
+                  <button type="button" id="yt-history-vol-btn" class="yt-volume-btn" title="Bật / Tắt tiếng (M)">🔊</button>
+                  <input type="range" id="yt-history-vol-slider" class="yt-volume-slider" min="0" max="1" step="0.05" value="1" title="Âm lượng">
+                </div>
+                <button type="button" id="yt-history-speed-btn" class="yt-speed-btn" title="Tốc độ phát: 1x (Bấm để đổi)">⚡ 1x</button>
                 <button type="button" id="yt-player-close-btn" class="yt-preview-close-btn" title="Đóng trình phát">✕</button>
               </div>
             </div>
             <div id="yt-history-audio-controls" class="yt-preview-controls">
+              <button type="button" id="yt-history-shuffle-btn" class="yt-preview-ctrl-btn off" title="Phát ngẫu nhiên (S)">🔀</button>
               <button type="button" id="yt-history-prev-btn" class="yt-preview-nav-btn" title="Bài trước (⏮)">⏮</button>
               <button type="button" id="yt-player-play-btn" class="yt-preview-toggle-btn" title="Phát / Tạm dừng">▶</button>
               <button type="button" id="yt-history-next-btn" class="yt-preview-nav-btn" title="Bài tiếp theo (⏭)">⏭</button>
+              <button type="button" id="yt-history-repeat-btn" class="yt-preview-ctrl-btn active" title="Chế độ lặp lại (R): Lặp danh sách">🔁</button>
               <span id="yt-player-current-time" class="yt-preview-time">00:00</span>
-              <input type="range" id="yt-player-seek-bar" class="yt-preview-seek-bar" min="0" max="100" value="0" step="0.1">
+              <div class="yt-seek-wrap">
+                <input type="range" id="yt-player-seek-bar" class="yt-preview-seek-bar" min="0" max="100" value="0" step="0.1">
+                <div id="yt-history-seek-tooltip" class="yt-seek-tooltip" style="display: none;">00:00</div>
+              </div>
               <span id="yt-player-total-time" class="yt-preview-time">00:00</span>
             </div>
             <audio id="yt-audio-element" style="display: none;"></audio>
@@ -583,20 +630,46 @@
       syncSettingsToStorage();
     });
 
+    async function initDefaultSavePath() {
+      if (!pathInput.value || pathInput.value.trim() === '') {
+        try {
+          const res = await apiFetch('/api/default-folder');
+          const data = await res.json();
+          if (data && data.default_folder) {
+            if (!pathInput.value || pathInput.value.trim() === '') {
+              pathInput.value = data.default_folder;
+              syncSettingsToStorage();
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Tự động điền đường dẫn thư mục Downloads mặc định nếu người dùng chưa chọn
+    initDefaultSavePath();
+
     browseBtn.addEventListener('click', async () => {
-      showStatus('⏳ Đang mở cửa sổ chọn thư mục...', '#a8c7fa');
+      showStatus('⏳ Đang mở cửa sổ chọn thư mục trên máy tính...', '#a8c7fa');
       try {
-        const res = await apiFetch('/select-folder', { method: 'POST' });
+        const res = await apiFetch('/select-folder', {
+          method: 'POST',
+          body: JSON.stringify({
+            initial_path: pathInput.value.trim(),
+            title: "Chọn thư mục lưu nhạc MP3"
+          })
+        });
         const data = await res.json();
         if (data.status === 'success' && data.path) {
           pathInput.value = data.path;
           syncSettingsToStorage();
           showStatus(`✅ Đã chọn: ${data.path}`, '#c2efb3');
-        } else {
+        } else if (data.status === 'cancel') {
           showStatus('', '');
+        } else {
+          showStatus(`⚠️ ${data.message || 'Chưa chọn thư mục'}`, '#f2b8b5');
         }
       } catch (e) {
-        showStatus('❌ Không thể mở cửa sổ chọn thư mục!', '#f2b8b5');
+        showStatus('❌ Không thể mở cửa sổ chọn thư mục! Bạn có thể dán trực tiếp đường dẫn vào ô.', '#f2b8b5');
       }
     });
 
@@ -946,19 +1019,122 @@ function getFileListOutput() {
       document.addEventListener('mouseup', onMouseUp);
     });
 
-    bubble.addEventListener('click', () => {
-      if (!isDragging) {
+    // --- QUẢN LÝ TRẠNG THÁI NÚT NỔI DYNAMIC (IDEA 1 + 2 + 3) ---
+    const bubbleProgressCircle = document.getElementById('yt-bubble-progress-circle');
+    const bubbleIslandTitle = document.getElementById('yt-bubble-island-title');
+    const bubbleIslandPlay = document.getElementById('yt-bubble-island-play');
+    const bubbleIslandNext = document.getElementById('yt-bubble-island-next');
+
+    function updateBubblePlayingState(isPlaying, title = '') {
+      if (isPlaying) {
+        bubble.classList.add('is-playing');
+        if (title && bubbleIslandTitle) {
+          bubbleIslandTitle.textContent = title;
+        }
+        if (bubbleIslandPlay) bubbleIslandPlay.textContent = '⏸';
+      } else {
+        const isPreviewPlaying = previewAudio && !previewAudio.paused && previewAudio.src;
+        const isHistoryPlaying = audioElement && !audioElement.paused && audioElement.src;
+        if (!isPreviewPlaying && !isHistoryPlaying) {
+          bubble.classList.remove('is-playing');
+          if (bubbleIslandPlay) bubbleIslandPlay.textContent = '▶';
+        }
+      }
+    }
+
+    function updateBubbleDownloadProgress(status, percent = 0) {
+      const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+      const pctEl = document.getElementById('yt-bubble-dl-pct');
+      const badgeEl = document.getElementById('yt-bubble-dl-badge');
+      const trackEl = document.getElementById('yt-bubble-island-track');
+      const fillEl = document.getElementById('yt-bubble-island-fill');
+      const islandTitle = document.getElementById('yt-bubble-island-title');
+
+      if (pctEl) pctEl.textContent = `${p}%`;
+      if (badgeEl) badgeEl.textContent = `${p}%`;
+
+      if (status === 'running') {
+        bubble.classList.add('is-downloading');
+        if (bubbleProgressCircle) {
+          const circumference = 157.08; // 2 * Math.PI * 25
+          const offset = circumference - (p / 100) * circumference;
+          bubbleProgressCircle.style.strokeDashoffset = String(offset);
+        }
+        if (trackEl) trackEl.style.display = 'block';
+        if (fillEl) fillEl.style.width = `${p}%`;
+        if (islandTitle && !bubble.classList.contains('is-playing')) {
+          islandTitle.textContent = `⬇️ Đang tải: ${p}%`;
+        }
+      } else {
+        bubble.classList.remove('is-downloading');
+        if (bubbleProgressCircle) {
+          bubbleProgressCircle.style.strokeDashoffset = '157.08';
+        }
+        if (trackEl) trackEl.style.display = 'none';
+        if (fillEl) fillEl.style.width = '0%';
+      }
+    }
+
+    // Dynamic Island Action Buttons
+    if (bubbleIslandPlay) {
+      bubbleIslandPlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (previewBar && previewBar.style.display !== 'none') {
+          togglePreviewPlayState();
+        } else if (historyPlayer && historyPlayer.style.display !== 'none') {
+          if (audioElement.src) {
+            if (audioElement.paused) audioElement.play().catch(() => {});
+            else audioElement.pause();
+          }
+        }
+      });
+    }
+
+    if (bubbleIslandNext) {
+      bubbleIslandNext.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (previewBar && previewBar.style.display !== 'none') {
+          playNextPreview(false);
+        } else if (historyPlayer && historyPlayer.style.display !== 'none') {
+          playNextHistoryTrack(false);
+        }
+      });
+    }
+
+    // Click & Double click trên nút nổi
+    let bubbleClickTimer = null;
+    bubble.addEventListener('click', (e) => {
+      if (isDragging) return;
+      if (e.target.closest('.yt-bubble-island-actions')) return;
+
+      if (bubbleClickTimer) {
+        clearTimeout(bubbleClickTimer);
+        bubbleClickTimer = null;
+        // Double Click: Play / Pause nhanh
+        if (previewBar && previewBar.style.display !== 'none') {
+          togglePreviewPlayState();
+        } else if (historyPlayer && historyPlayer.style.display !== 'none') {
+          if (audioElement.src) {
+            if (audioElement.paused) audioElement.play().catch(() => {});
+            else audioElement.pause();
+          }
+        }
+        return;
+      }
+
+      bubbleClickTimer = setTimeout(() => {
+        bubbleClickTimer = null;
         if (win.classList.toggle('active')) {
           updateWindowPosition();
           checkServerHealth();
           checkDriveStatus();
-          // Tự động nạp trước ngầm bài hát trang hiện tại khi mở tiện ích
           if (window.location.href.includes('watch?v=')) {
             fetchDirectStreamUrl(window.location.href).catch(() => {});
           }
         }
-      }
+      }, 220);
     });
+
     setInterval(() => {
       if (win.classList.contains('active')) {
         checkServerHealth();
@@ -1132,6 +1308,7 @@ function getFileListOutput() {
       
       btn.setAttribute('disabled', 'true');
       bubble.classList.add('loading');
+      updateBubbleDownloadProgress('running', 0);
       renderDuplicateList([]);
       
       const ctrlBox = document.getElementById('yt-download-ctrl-box');
@@ -1153,6 +1330,7 @@ function getFileListOutput() {
             showStatus(`⏳ ${data.message}`, '#a8c7fa');
             renderDuplicateList(data.duplicate_files);
             btn.innerHTML = data.percent > 0 ? `⏳ ${data.percent}%` : `⏳ Đang kiểm tra...`;
+            updateBubbleDownloadProgress('running', data.percent || 0);
           } else if (data.status === 'completed') {
             clearInterval(progressInterval);
             progressInterval = null;
@@ -1160,6 +1338,7 @@ function getFileListOutput() {
             renderDuplicateList(data.duplicate_files);
             btn.removeAttribute('disabled');
             bubble.classList.remove('loading');
+            updateBubbleDownloadProgress('idle');
             btn.innerHTML = originalContent;
             updateCount();
             
@@ -1184,6 +1363,7 @@ function getFileListOutput() {
             renderDuplicateList(data.duplicate_files);
             btn.removeAttribute('disabled');
             bubble.classList.remove('loading');
+            updateBubbleDownloadProgress('idle');
             btn.innerHTML = originalContent;
             updateCount();
             
@@ -1200,6 +1380,7 @@ function getFileListOutput() {
             renderDuplicateList(data.duplicate_files);
             btn.removeAttribute('disabled');
             bubble.classList.remove('loading');
+            updateBubbleDownloadProgress('idle');
             btn.innerHTML = originalContent;
             updateCount();
             
@@ -1211,11 +1392,12 @@ function getFileListOutput() {
           showStatus('❌ Lỗi kết nối kiểm tra tiến trình!', '#f2b8b5');
           btn.removeAttribute('disabled');
           bubble.classList.remove('loading');
+          updateBubbleDownloadProgress('idle');
           btn.innerHTML = originalContent;
           updateCount();
           if (ctrlBox) ctrlBox.style.display = 'none';
         }
-      }, 1000);
+      }, 350);
     }
 
     async function checkInitialProgress() {
@@ -1671,6 +1853,72 @@ function getFileListOutput() {
       // Khi tải về máy, Loudnorm được xử lý bằng FFmpeg filter EBU R128 chất lượng cao nhất.
     }
 
+    // --- CÁC TIỆN ÍCH TRÌNH PHÁT SPOTIFY-STYLE ---
+    const PLAYBACK_SPEEDS = [1.0, 1.25, 1.5, 2.0, 0.75];
+
+    function updateSpeedBtnUI(btn, speed) {
+      if (!btn) return;
+      btn.textContent = `⚡ ${speed}x`;
+      btn.title = `Tốc độ phát: ${speed}x (Bấm để đổi)`;
+      btn.classList.toggle('custom-speed', speed !== 1.0);
+    }
+
+    function updateRepeatBtnUI(btn, mode) {
+      if (!btn) return;
+      if (mode === 'one') {
+        btn.innerHTML = '🔂';
+        btn.className = 'yt-preview-ctrl-btn active repeat-one';
+        btn.title = 'Chế độ lặp lại (R): Lặp 1 bài duy nhất';
+      } else if (mode === 'all') {
+        btn.innerHTML = '🔁';
+        btn.className = 'yt-preview-ctrl-btn active';
+        btn.title = 'Chế độ lặp lại (R): Lặp toàn bộ danh sách';
+      } else {
+        btn.innerHTML = '🔁';
+        btn.className = 'yt-preview-ctrl-btn off';
+        btn.title = 'Chế độ lặp lại (R): Đang Tắt';
+      }
+    }
+
+    function updateShuffleBtnUI(btn, isShuffle) {
+      if (!btn) return;
+      btn.className = isShuffle ? 'yt-preview-ctrl-btn active' : 'yt-preview-ctrl-btn off';
+      btn.title = isShuffle ? 'Phát ngẫu nhiên (S): Đang Bật' : 'Phát ngẫu nhiên (S): Đang Tắt';
+    }
+
+    function setupInteractiveSeekbar(seekBar, tooltipEl, audioEl, timeEl) {
+      if (!seekBar || !audioEl) return;
+
+      const updateFill = (percent) => {
+        seekBar.style.background = `linear-gradient(to right, #a8c7fa ${percent}%, rgba(255,255,255,0.15) ${percent}%)`;
+      };
+
+      seekBar.addEventListener('input', () => {
+        const val = parseFloat(seekBar.value) || 0;
+        updateFill(val);
+        if (audioEl.duration && timeEl) {
+          const targetTime = (val / 100) * audioEl.duration;
+          timeEl.textContent = formatTime(targetTime);
+        }
+      });
+
+      if (tooltipEl) {
+        seekBar.addEventListener('mousemove', (e) => {
+          if (!audioEl.duration) return;
+          const rect = seekBar.getBoundingClientRect();
+          const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          const hoverTime = pos * audioEl.duration;
+          tooltipEl.textContent = formatTime(hoverTime);
+          tooltipEl.style.left = `${pos * 100}%`;
+          tooltipEl.style.display = 'block';
+        });
+
+        seekBar.addEventListener('mouseleave', () => {
+          tooltipEl.style.display = 'none';
+        });
+      }
+    }
+
     // --- TRÌNH PHÁT NGHE THỬ ÂM THANH (TAB 2) ---
     const previewBar = document.getElementById('yt-preview-player-bar');
     const previewTitle = document.getElementById('yt-preview-title');
@@ -1678,15 +1926,32 @@ function getFileListOutput() {
     const previewToggleBtn = document.getElementById('yt-preview-toggle-btn');
     const previewPrevBtn = document.getElementById('yt-preview-prev-btn');
     const previewNextBtn = document.getElementById('yt-preview-next-btn');
-    const previewAutoplayBtn = document.getElementById('yt-preview-autoplay-btn');
+    const previewShuffleBtn = document.getElementById('yt-preview-shuffle-btn');
+    const previewRepeatBtn = document.getElementById('yt-preview-repeat-btn');
+    const previewSpeedBtn = document.getElementById('yt-preview-speed-btn');
     const previewCloseBtn = document.getElementById('yt-preview-close-btn');
     const previewSeekBar = document.getElementById('yt-preview-seek-bar');
+    const previewSeekTooltip = document.getElementById('yt-preview-seek-tooltip');
     const previewCurrentTime = document.getElementById('yt-preview-current-time');
     const previewTotalTime = document.getElementById('yt-preview-total-time');
+    const previewDisc = document.getElementById('yt-preview-disc');
+    const previewVolBtn = document.getElementById('yt-preview-vol-btn');
+    const previewVolSlider = document.getElementById('yt-preview-vol-slider');
 
     if (previewAudio) {
       previewAudio.preload = 'auto';
     }
+
+    // State nghe thử
+    let previewRepeatMode = localStorage.getItem('mallios_preview_repeat') || 'all'; // 'all', 'one', 'off'
+    let isPreviewShuffle = localStorage.getItem('mallios_preview_shuffle') === 'true';
+    let previewSpeed = parseFloat(localStorage.getItem('mallios_preview_speed') || '1.0');
+    let previewShuffleHistory = [];
+
+    updateRepeatBtnUI(previewRepeatBtn, previewRepeatMode);
+    updateShuffleBtnUI(previewShuffleBtn, isPreviewShuffle);
+    updateSpeedBtnUI(previewSpeedBtn, previewSpeed);
+    setupInteractiveSeekbar(previewSeekBar, previewSeekTooltip, previewAudio, previewCurrentTime);
 
     // --- BỘ NHỚ ĐỆM DIRECT AUDIO STREAM TRỰC TIẾP (PREVIEW STREAM CACHE) ---
     const previewStreamUrlCache = new Map();
@@ -1734,7 +1999,6 @@ function getFileListOutput() {
     let currentPlaylistItems = [];
     let currentPreviewIndex = -1;
     let currentPreviewUrl = null;
-    let isAutoplayEnabled = true;
     let isUserSeeking = false;
 
     function formatTime(seconds) {
@@ -1788,6 +2052,7 @@ function getFileListOutput() {
       previewCurrentTime.textContent = '00:00';
       previewTotalTime.textContent = '...';
       previewSeekBar.value = 0;
+      previewSeekBar.style.background = 'rgba(255,255,255,0.15)';
       previewToggleBtn.innerHTML = '⏳';
 
       updateItemPlayBtns('⏳');
@@ -1804,7 +2069,6 @@ function getFileListOutput() {
         fetchSponsorBlockSegments(videoId).then(segments => {
           if (currentPreviewUrl === item.url) {
             currentPreviewSegments = segments;
-            // Nếu intro bắt đầu từ đầu bài (0s - Xs)
             if (segments.length > 0 && segments[0].start <= 2.5) {
               if (previewAudio.currentTime < segments[0].end) {
                 previewAudio.currentTime = segments[0].end;
@@ -1816,6 +2080,14 @@ function getFileListOutput() {
         });
       }
 
+      // Tự động dừng trình phát Lịch sử nếu đang chạy
+      if (audioElement && !audioElement.paused) {
+        audioElement.pause();
+        if (playBtn) playBtn.innerText = '▶';
+        if (historyDisc) historyDisc.classList.remove('playing');
+        loadHistoryList();
+      }
+
       if (previewAudio) {
         const cleanUrl = item.url.split('&')[0].trim();
         const directUrl = previewStreamUrlCache.get(cleanUrl);
@@ -1825,6 +2097,7 @@ function getFileListOutput() {
           previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(cleanUrl)}`;
           fetchDirectStreamUrl(cleanUrl).catch(() => {});
         }
+        previewAudio.playbackRate = previewSpeed;
         previewAudio.load();
         if (shouldPlay) {
           previewAudio.play().catch(err => {
@@ -1850,11 +2123,7 @@ function getFileListOutput() {
 
     function togglePreviewSong(item, itemBtn) {
       if (currentPreviewUrl === item.url) {
-        if (previewAudio.paused) {
-          previewAudio.play().catch(() => {});
-        } else {
-          previewAudio.pause();
-        }
+        togglePreviewPlayState();
         return;
       }
 
@@ -1862,11 +2131,59 @@ function getFileListOutput() {
       startPreviewSongByIndex(foundIdx >= 0 ? foundIdx : 0, true);
     }
 
+    function togglePreviewPlayState() {
+      if (!currentPreviewUrl) {
+        if (currentPlaylistItems.length > 0) {
+          startPreviewSongByIndex(0, true);
+        }
+        return;
+      }
+      if (previewAudio.paused) {
+        previewAudio.play().catch(() => {});
+      } else {
+        previewAudio.pause();
+      }
+    }
+
+    function seekPreviewRelative(seconds) {
+      if (!previewAudio || !previewAudio.duration) return;
+      previewAudio.currentTime = Math.max(0, Math.min(previewAudio.duration, previewAudio.currentTime + seconds));
+    }
+
     function playNextPreview(isAuto = false) {
       if (!currentPlaylistItems || currentPlaylistItems.length === 0) return;
+
+      if (isAuto && previewRepeatMode === 'one') {
+        if (previewAudio) {
+          previewAudio.currentTime = 0;
+          previewAudio.play().catch(() => {});
+        }
+        return;
+      }
+
+      if (isPreviewShuffle && currentPlaylistItems.length > 1) {
+        if (currentPreviewIndex >= 0) {
+          previewShuffleHistory.push(currentPreviewIndex);
+          if (previewShuffleHistory.length > 50) previewShuffleHistory.shift();
+        }
+        let randomIdx;
+        do {
+          randomIdx = Math.floor(Math.random() * currentPlaylistItems.length);
+        } while (randomIdx === currentPreviewIndex && currentPlaylistItems.length > 1);
+        startPreviewSongByIndex(randomIdx, true);
+        return;
+      }
+
       let nextIndex = currentPreviewIndex + 1;
       if (nextIndex >= currentPlaylistItems.length) {
-        nextIndex = 0; // Tự động lặp lại từ bài đầu tiên
+        if (previewRepeatMode === 'off' && isAuto) {
+          if (previewAudio) previewAudio.pause();
+          previewToggleBtn.innerHTML = '▶';
+          updateItemPlayBtns('▶');
+          if (previewDisc) previewDisc.classList.remove('playing');
+          return;
+        }
+        nextIndex = 0;
       }
       startPreviewSongByIndex(nextIndex, true);
     }
@@ -1878,6 +2195,15 @@ function getFileListOutput() {
         previewAudio.play().catch(() => {});
         return;
       }
+
+      if (isPreviewShuffle && previewShuffleHistory.length > 0) {
+        const prevIdx = previewShuffleHistory.pop();
+        if (prevIdx >= 0 && prevIdx < currentPlaylistItems.length) {
+          startPreviewSongByIndex(prevIdx, true);
+          return;
+        }
+      }
+
       let prevIndex = currentPreviewIndex - 1;
       if (prevIndex < 0) {
         prevIndex = currentPlaylistItems.length - 1;
@@ -1887,37 +2213,43 @@ function getFileListOutput() {
 
     if (previewAudio) {
       previewAudio.addEventListener('playing', () => {
+        if (audioElement && !audioElement.paused) {
+          audioElement.pause();
+          if (playBtn) playBtn.innerText = '▶';
+          if (historyDisc) historyDisc.classList.remove('playing');
+          loadHistoryList();
+        }
         previewToggleBtn.innerHTML = '⏸';
         updateItemPlayBtns('⏸');
+        if (previewDisc) previewDisc.classList.add('playing');
+        updateBubblePlayingState(true, previewTitle ? previewTitle.textContent : '');
       });
 
       previewAudio.addEventListener('pause', () => {
         previewToggleBtn.innerHTML = '▶';
         updateItemPlayBtns('▶');
+        if (previewDisc) previewDisc.classList.remove('playing');
+        updateBubblePlayingState(false);
       });
 
       previewAudio.addEventListener('error', (e) => {
         console.warn("Lỗi tải audio preview:", e);
         previewToggleBtn.innerHTML = '▶';
         updateItemPlayBtns('▶');
+        if (previewDisc) previewDisc.classList.remove('playing');
+        updateBubblePlayingState(false);
         showStatus('⚠️ Nguồn YouTube đang được kết nối lại, vui lòng bấm ▶ thử lại!', '#f2b8b5');
       });
 
       previewAudio.addEventListener('ended', () => {
-        if (isAutoplayEnabled && currentPlaylistItems.length > 0) {
-          playNextPreview(true);
-        } else {
-          previewToggleBtn.innerHTML = '▶';
-          updateItemPlayBtns('▶');
-          previewSeekBar.value = 0;
-          previewCurrentTime.textContent = '00:00';
-        }
+        playNextPreview(true);
       });
 
       previewAudio.addEventListener('timeupdate', () => {
         if (!isUserSeeking && previewAudio.duration) {
           const percent = (previewAudio.currentTime / previewAudio.duration) * 100;
           previewSeekBar.value = percent;
+          previewSeekBar.style.background = `linear-gradient(to right, #a8c7fa ${percent}%, rgba(255,255,255,0.15) ${percent}%)`;
           previewCurrentTime.textContent = formatTime(previewAudio.currentTime);
           checkAndSkipSponsorBlock(previewAudio, currentPreviewSegments, true);
         }
@@ -1927,7 +2259,6 @@ function getFileListOutput() {
         if (previewAudio.duration) {
           previewTotalTime.textContent = formatTime(previewAudio.duration);
         }
-        // Kiểm tra lại đoạn intro nếu tải xong metadata
         if (currentPreviewSegments && currentPreviewSegments.length > 0) {
           if (currentPreviewSegments[0].start <= 2.5 && previewAudio.currentTime < currentPreviewSegments[0].end) {
             previewAudio.currentTime = currentPreviewSegments[0].end;
@@ -1945,17 +2276,7 @@ function getFileListOutput() {
 
     if (previewToggleBtn) {
       previewToggleBtn.addEventListener('click', () => {
-        if (!currentPreviewUrl) {
-          if (currentPlaylistItems.length > 0) {
-            startPreviewSongByIndex(0, true);
-          }
-          return;
-        }
-        if (previewAudio.paused) {
-          previewAudio.play().catch(() => {});
-        } else {
-          previewAudio.pause();
-        }
+        togglePreviewPlayState();
       });
     }
 
@@ -1971,13 +2292,41 @@ function getFileListOutput() {
       });
     }
 
-    if (previewAutoplayBtn) {
-      previewAutoplayBtn.addEventListener('click', () => {
-        isAutoplayEnabled = !isAutoplayEnabled;
-        previewAutoplayBtn.classList.toggle('active', isAutoplayEnabled);
-        previewAutoplayBtn.title = isAutoplayEnabled 
-          ? "Tự động phát bài tiếp theo (Đang Bật)" 
-          : "Tự động phát bài tiếp theo (Đang Tắt)";
+    if (previewShuffleBtn) {
+      previewShuffleBtn.addEventListener('click', () => {
+        isPreviewShuffle = !isPreviewShuffle;
+        localStorage.setItem('mallios_preview_shuffle', String(isPreviewShuffle));
+        updateShuffleBtnUI(previewShuffleBtn, isPreviewShuffle);
+        previewShuffleHistory = [];
+        showStatus(isPreviewShuffle ? '🔀 Đã bật phát ngẫu nhiên' : '➡️ Đã tắt phát ngẫu nhiên (phát tuần tự)', '#a8c7fa');
+      });
+    }
+
+    if (previewRepeatBtn) {
+      previewRepeatBtn.addEventListener('click', () => {
+        if (previewRepeatMode === 'all') previewRepeatMode = 'one';
+        else if (previewRepeatMode === 'one') previewRepeatMode = 'off';
+        else previewRepeatMode = 'all';
+
+        localStorage.setItem('mallios_preview_repeat', previewRepeatMode);
+        updateRepeatBtnUI(previewRepeatBtn, previewRepeatMode);
+
+        const msg = previewRepeatMode === 'one' 
+          ? '🔂 Đã chọn: Lặp lại 1 bài' 
+          : (previewRepeatMode === 'all' ? '🔁 Đã chọn: Lặp danh sách' : '➡️ Đã chọn: Không lặp lại');
+        showStatus(msg, '#a8c7fa');
+      });
+    }
+
+    if (previewSpeedBtn && previewAudio) {
+      previewSpeedBtn.addEventListener('click', () => {
+        let idx = PLAYBACK_SPEEDS.indexOf(previewSpeed);
+        if (idx === -1) idx = 0;
+        previewSpeed = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
+        previewAudio.playbackRate = previewSpeed;
+        localStorage.setItem('mallios_preview_speed', String(previewSpeed));
+        updateSpeedBtnUI(previewSpeedBtn, previewSpeed);
+        showStatus(`⚡ Tốc độ nghe thử: ${previewSpeed}x`, '#a8c7fa');
       });
     }
 
@@ -1991,13 +2340,12 @@ function getFileListOutput() {
         currentPreviewIndex = -1;
         if (previewBar) previewBar.style.display = 'none';
         updateItemPlayBtns('▶');
+        if (previewDisc) previewDisc.classList.remove('playing');
+        updateBubblePlayingState(false);
       });
     }
 
     // --- THANH ÂM LƯỢNG NGHE THỬ ---
-    const previewVolBtn = document.getElementById('yt-preview-vol-btn');
-    const previewVolSlider = document.getElementById('yt-preview-vol-slider');
-
     if (previewVolSlider && previewAudio) {
       const savedVol = localStorage.getItem('mallios_preview_vol');
       if (savedVol !== null) {
@@ -2546,16 +2894,99 @@ function getFileListOutput() {
 
     const playerCloseBtn = document.getElementById('yt-player-close-btn');
     const playerSeekBar = document.getElementById('yt-player-seek-bar');
+    const historySeekTooltip = document.getElementById('yt-history-seek-tooltip');
     const playerCurrentTime = document.getElementById('yt-player-current-time');
     const playerTotalTime = document.getElementById('yt-player-total-time');
-    const historyAutoplayBtn = document.getElementById('yt-history-autoplay-btn');
+    const historyShuffleBtn = document.getElementById('yt-history-shuffle-btn');
+    const historyRepeatBtn = document.getElementById('yt-history-repeat-btn');
+    const historySpeedBtn = document.getElementById('yt-history-speed-btn');
     const historyPrevBtn = document.getElementById('yt-history-prev-btn');
     const historyNextBtn = document.getElementById('yt-history-next-btn');
+    const historyDisc = document.getElementById('yt-history-disc');
+    const historyVolBtn = document.getElementById('yt-history-vol-btn');
+    const historyVolSlider = document.getElementById('yt-history-vol-slider');
 
-    let isHistoryAutoplayEnabled = true;
+    let historyRepeatMode = localStorage.getItem('mallios_history_repeat') || 'all'; // 'all', 'one', 'off'
+    let isHistoryShuffle = localStorage.getItem('mallios_history_shuffle') === 'true';
+    let historySpeed = parseFloat(localStorage.getItem('mallios_history_speed') || '1.0');
+    let historyShuffleHistory = [];
     let currentHistoryList = [];
     let currentHistoryIndex = -1;
     let isHistoryUserSeeking = false;
+
+    updateRepeatBtnUI(historyRepeatBtn, historyRepeatMode);
+    updateShuffleBtnUI(historyShuffleBtn, isHistoryShuffle);
+    updateSpeedBtnUI(historySpeedBtn, historySpeed);
+    setupInteractiveSeekbar(playerSeekBar, historySeekTooltip, audioElement, playerCurrentTime);
+
+    // Âm lượng trình phát lịch sử
+    if (historyVolSlider && audioElement) {
+      const savedHistVol = localStorage.getItem('mallios_history_vol');
+      if (savedHistVol !== null) {
+        historyVolSlider.value = savedHistVol;
+        audioElement.volume = parseFloat(savedHistVol);
+      }
+      historyVolSlider.addEventListener('input', () => {
+        const vol = parseFloat(historyVolSlider.value);
+        audioElement.volume = vol;
+        localStorage.setItem('mallios_history_vol', String(vol));
+        if (historyVolBtn) historyVolBtn.textContent = vol === 0 ? '🔇' : (vol < 0.5 ? '🔉' : '🔊');
+      });
+    }
+
+    if (historyVolBtn && historyVolSlider && audioElement) {
+      historyVolBtn.addEventListener('click', () => {
+        if (audioElement.volume > 0) {
+          audioElement.dataset.lastVol = String(audioElement.volume);
+          audioElement.volume = 0;
+          historyVolSlider.value = 0;
+          historyVolBtn.textContent = '🔇';
+        } else {
+          const lastVol = parseFloat(audioElement.dataset.lastVol || '1');
+          audioElement.volume = lastVol;
+          historyVolSlider.value = lastVol;
+          historyVolBtn.textContent = lastVol < 0.5 ? '🔉' : '🔊';
+        }
+      });
+    }
+
+    if (historySpeedBtn && audioElement) {
+      historySpeedBtn.addEventListener('click', () => {
+        let idx = PLAYBACK_SPEEDS.indexOf(historySpeed);
+        if (idx === -1) idx = 0;
+        historySpeed = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
+        audioElement.playbackRate = historySpeed;
+        localStorage.setItem('mallios_history_speed', String(historySpeed));
+        updateSpeedBtnUI(historySpeedBtn, historySpeed);
+        showStatus(`⚡ Tốc độ phát lịch sử: ${historySpeed}x`, '#a8c7fa');
+      });
+    }
+
+    if (historyShuffleBtn) {
+      historyShuffleBtn.addEventListener('click', () => {
+        isHistoryShuffle = !isHistoryShuffle;
+        localStorage.setItem('mallios_history_shuffle', String(isHistoryShuffle));
+        updateShuffleBtnUI(historyShuffleBtn, isHistoryShuffle);
+        historyShuffleHistory = [];
+        showStatus(isHistoryShuffle ? '🔀 Đã bật phát ngẫu nhiên lịch sử' : '➡️ Đã tắt phát ngẫu nhiên lịch sử', '#a8c7fa');
+      });
+    }
+
+    if (historyRepeatBtn) {
+      historyRepeatBtn.addEventListener('click', () => {
+        if (historyRepeatMode === 'all') historyRepeatMode = 'one';
+        else if (historyRepeatMode === 'one') historyRepeatMode = 'off';
+        else historyRepeatMode = 'all';
+
+        localStorage.setItem('mallios_history_repeat', historyRepeatMode);
+        updateRepeatBtnUI(historyRepeatBtn, historyRepeatMode);
+
+        const msg = historyRepeatMode === 'one' 
+          ? '🔂 Đã chọn: Lặp lại 1 bài' 
+          : (historyRepeatMode === 'all' ? '🔁 Đã chọn: Lặp danh sách' : '➡️ Đã chọn: Không lặp lại');
+        showStatus(msg, '#a8c7fa');
+      });
+    }
 
     function playHistoryTrackByIndex(index) {
       if (!currentHistoryList || currentHistoryList.length === 0) return;
@@ -2569,9 +3000,42 @@ function getFileListOutput() {
       }
     }
 
-    function playNextHistoryTrack() {
+    function playNextHistoryTrack(isAuto = false) {
       if (!currentHistoryList || currentHistoryList.length === 0) return;
-      playHistoryTrackByIndex(currentHistoryIndex + 1);
+
+      if (isAuto && historyRepeatMode === 'one') {
+        if (audioElement) {
+          audioElement.currentTime = 0;
+          audioElement.play().catch(() => {});
+        }
+        return;
+      }
+
+      if (isHistoryShuffle && currentHistoryList.length > 1) {
+        if (currentHistoryIndex >= 0) {
+          historyShuffleHistory.push(currentHistoryIndex);
+          if (historyShuffleHistory.length > 50) historyShuffleHistory.shift();
+        }
+        let randomIdx;
+        do {
+          randomIdx = Math.floor(Math.random() * currentHistoryList.length);
+        } while (randomIdx === currentHistoryIndex && currentHistoryList.length > 1);
+        playHistoryTrackByIndex(randomIdx);
+        return;
+      }
+
+      let nextIndex = currentHistoryIndex + 1;
+      if (nextIndex >= currentHistoryList.length) {
+        if (historyRepeatMode === 'off' && isAuto) {
+          if (audioElement) audioElement.pause();
+          playBtn.innerText = '▶';
+          if (historyDisc) historyDisc.classList.remove('playing');
+          loadHistoryList();
+          return;
+        }
+        nextIndex = 0;
+      }
+      playHistoryTrackByIndex(nextIndex);
     }
 
     function playPrevHistoryTrack() {
@@ -2581,17 +3045,20 @@ function getFileListOutput() {
         audioElement.play().catch(() => {});
         return;
       }
-      playHistoryTrackByIndex(currentHistoryIndex - 1);
-    }
 
-    if (historyAutoplayBtn) {
-      historyAutoplayBtn.addEventListener('click', () => {
-        isHistoryAutoplayEnabled = !isHistoryAutoplayEnabled;
-        historyAutoplayBtn.classList.toggle('active', isHistoryAutoplayEnabled);
-        historyAutoplayBtn.title = isHistoryAutoplayEnabled 
-          ? "Tự động phát bài tiếp trong Lịch sử (Đang Bật)" 
-          : "Tự động phát bài tiếp trong Lịch sử (Đang Tắt)";
-      });
+      if (isHistoryShuffle && historyShuffleHistory.length > 0) {
+        const prevIdx = historyShuffleHistory.pop();
+        if (prevIdx >= 0 && prevIdx < currentHistoryList.length) {
+          playHistoryTrackByIndex(prevIdx);
+          return;
+        }
+      }
+
+      let prevIndex = currentHistoryIndex - 1;
+      if (prevIndex < 0) {
+        prevIndex = currentHistoryList.length - 1;
+      }
+      playHistoryTrackByIndex(prevIndex);
     }
 
     if (historyPrevBtn) {
@@ -2599,7 +3066,7 @@ function getFileListOutput() {
     }
 
     if (historyNextBtn) {
-      historyNextBtn.addEventListener('click', () => playNextHistoryTrack());
+      historyNextBtn.addEventListener('click', () => playNextHistoryTrack(false));
     }
 
     function togglePlayItem(item, button, forcePlay = false) {
@@ -2608,12 +3075,22 @@ function getFileListOutput() {
           audioElement.play().catch(() => {});
           if (button) button.innerText = '⏸';
           playBtn.innerText = '⏸';
+          if (historyDisc) historyDisc.classList.add('playing');
         } else {
           audioElement.pause();
           if (button) button.innerText = '▶';
           playBtn.innerText = '▶';
+          if (historyDisc) historyDisc.classList.remove('playing');
         }
       } else {
+        // Tự động dừng trình phát Nghe Thử nếu đang chạy
+        if (previewAudio && !previewAudio.paused) {
+          previewAudio.pause();
+          if (previewToggleBtn) previewToggleBtn.innerHTML = '▶';
+          updateItemPlayBtns('▶');
+          if (previewDisc) previewDisc.classList.remove('playing');
+        }
+
         currentPlayingItem = item;
         currentHistoryIndex = currentHistoryList.findIndex(x => x.url === item.url);
         playerTitle.innerText = item.title;
@@ -2621,6 +3098,7 @@ function getFileListOutput() {
         playerCurrentTime.innerText = '00:00';
         playerTotalTime.innerText = '...';
         playerSeekBar.value = 0;
+        playerSeekBar.style.background = 'rgba(255,255,255,0.15)';
         playBtn.innerText = '⏳';
         if (button) button.innerText = '⏳';
         
@@ -2634,6 +3112,7 @@ function getFileListOutput() {
           audioElement.src = `${API_BASE_URL}/play?path=${encodeURIComponent(item.file_path)}`;
         }
         
+        audioElement.playbackRate = historySpeed;
         const dsp = getOrCreateAudioDSP(audioElement);
         if (dsp) {
           dsp.resume();
@@ -2657,6 +3136,8 @@ function getFileListOutput() {
         audioElement.src = '';
         currentPlayingItem = null;
         historyPlayer.style.display = 'none';
+        if (historyDisc) historyDisc.classList.remove('playing');
+        updateBubblePlayingState(false);
         loadHistoryList();
       });
     }
@@ -2703,7 +3184,9 @@ function getFileListOutput() {
           if (currentPlayingItem && currentPlayingItem.url === item.url) {
             audioElement.pause();
             historyPlayer.style.display = 'none';
+            if (historyDisc) historyDisc.classList.remove('playing');
             currentPlayingItem = null;
+            updateBubblePlayingState(false);
           }
           loadHistoryList();
           showStatus('✅ Đã xóa thành công.', '#c2efb3');
@@ -2717,6 +3200,7 @@ function getFileListOutput() {
       if (!isHistoryUserSeeking && audioElement.duration) {
         const percent = (audioElement.currentTime / audioElement.duration) * 100;
         playerSeekBar.value = percent;
+        playerSeekBar.style.background = `linear-gradient(to right, #a8c7fa ${percent}%, rgba(255,255,255,0.15) ${percent}%)`;
         playerCurrentTime.innerText = formatTime(audioElement.currentTime);
       }
     });
@@ -2734,24 +3218,27 @@ function getFileListOutput() {
     });
 
     audioElement.addEventListener('play', () => {
+      if (previewAudio && !previewAudio.paused) {
+        previewAudio.pause();
+        if (previewToggleBtn) previewToggleBtn.innerHTML = '▶';
+        updateItemPlayBtns('▶');
+        if (previewDisc) previewDisc.classList.remove('playing');
+      }
       playBtn.innerText = '⏸';
+      if (historyDisc) historyDisc.classList.add('playing');
+      updateBubblePlayingState(true, playerTitle ? playerTitle.innerText : '');
       loadHistoryList();
     });
 
     audioElement.addEventListener('pause', () => {
       playBtn.innerText = '▶';
+      if (historyDisc) historyDisc.classList.remove('playing');
+      updateBubblePlayingState(false);
       loadHistoryList();
     });
 
     audioElement.addEventListener('ended', () => {
-      if (isHistoryAutoplayEnabled && currentHistoryList.length > 0) {
-        playNextHistoryTrack();
-      } else {
-        playBtn.innerText = '▶';
-        currentPlayingItem = null;
-        historyPlayer.style.display = 'none';
-        loadHistoryList();
-      }
+      playNextHistoryTrack(true);
     });
 
     playBtn.onclick = () => {
@@ -2764,40 +3251,72 @@ function getFileListOutput() {
       }
     };
 
-    // --- PHÍM TẮT ĐIỀU KHIỂN NHANH (KEYBOARD SHORTCUTS) ---
+    // --- PHÍM TẮT ĐIỀU KHIỂN NHANH (KEYBOARD SHORTCUTS SPOTIFY STYLE) ---
     window.addEventListener('keydown', (e) => {
       const isInputFocused = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
       if (isInputFocused) return;
       if (!win || !win.classList.contains('active')) return;
 
+      const isPreviewActive = previewBar && previewBar.style.display !== 'none';
+      const isHistoryActive = historyPlayer && historyPlayer.style.display !== 'none';
+
       if (e.code === 'Space') {
         e.preventDefault();
-        if (previewBar && previewBar.style.display !== 'none') {
+        if (isPreviewActive) {
           togglePreviewPlayState();
-        } else if (audioElement && audioElement.src && historyPlayer && historyPlayer.style.display !== 'none') {
+        } else if (isHistoryActive && audioElement && audioElement.src) {
           if (audioElement.paused) audioElement.play().catch(() => {});
           else audioElement.pause();
         }
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
-        if (previewBar && previewBar.style.display !== 'none') {
-          seekPreviewRelative(-5);
-        } else if (audioElement && audioElement.duration && historyPlayer && historyPlayer.style.display !== 'none') {
-          audioElement.currentTime = Math.max(0, audioElement.currentTime - 5);
+        const delta = e.shiftKey ? -15 : -5;
+        if (isPreviewActive) {
+          seekPreviewRelative(delta);
+        } else if (isHistoryActive && audioElement && audioElement.duration) {
+          audioElement.currentTime = Math.max(0, audioElement.currentTime + delta);
         }
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
-        if (previewBar && previewBar.style.display !== 'none') {
-          seekPreviewRelative(5);
-        } else if (audioElement && audioElement.duration && historyPlayer && historyPlayer.style.display !== 'none') {
-          audioElement.currentTime = Math.min(audioElement.duration, audioElement.currentTime + 5);
+        const delta = e.shiftKey ? 15 : 5;
+        if (isPreviewActive) {
+          seekPreviewRelative(delta);
+        } else if (isHistoryActive && audioElement && audioElement.duration) {
+          audioElement.currentTime = Math.min(audioElement.duration, audioElement.currentTime + delta);
         }
       } else if (e.code === 'KeyN') {
-        if (previewBar && previewBar.style.display !== 'none') playNextPreview();
-        else if (historyPlayer && historyPlayer.style.display !== 'none') playNextHistoryTrack();
+        if (isPreviewActive) playNextPreview(false);
+        else if (isHistoryActive) playNextHistoryTrack(false);
       } else if (e.code === 'KeyP') {
-        if (previewBar && previewBar.style.display !== 'none') playPrevPreview();
-        else if (historyPlayer && historyPlayer.style.display !== 'none') playPrevHistoryTrack();
+        if (isPreviewActive) playPrevPreview();
+        else if (isHistoryActive) playPrevHistoryTrack();
+      } else if (e.code === 'KeyR') {
+        if (isPreviewActive && previewRepeatBtn) previewRepeatBtn.click();
+        else if (isHistoryActive && historyRepeatBtn) historyRepeatBtn.click();
+      } else if (e.code === 'KeyS') {
+        if (isPreviewActive && previewShuffleBtn) previewShuffleBtn.click();
+        else if (isHistoryActive && historyShuffleBtn) historyShuffleBtn.click();
+      } else if (e.code === 'KeyM') {
+        if (isPreviewActive && previewVolBtn) previewVolBtn.click();
+        else if (isHistoryActive && historyVolBtn) historyVolBtn.click();
+      } else if (e.code === 'ArrowUp') {
+        e.preventDefault();
+        if (isPreviewActive && previewVolSlider && previewAudio) {
+          previewVolSlider.value = Math.min(1, previewAudio.volume + 0.05);
+          previewVolSlider.dispatchEvent(new Event('input'));
+        } else if (isHistoryActive && historyVolSlider && audioElement) {
+          historyVolSlider.value = Math.min(1, audioElement.volume + 0.05);
+          historyVolSlider.dispatchEvent(new Event('input'));
+        }
+      } else if (e.code === 'ArrowDown') {
+        e.preventDefault();
+        if (isPreviewActive && previewVolSlider && previewAudio) {
+          previewVolSlider.value = Math.max(0, previewAudio.volume - 0.05);
+          previewVolSlider.dispatchEvent(new Event('input'));
+        } else if (isHistoryActive && historyVolSlider && audioElement) {
+          historyVolSlider.value = Math.max(0, audioElement.volume - 0.05);
+          historyVolSlider.dispatchEvent(new Event('input'));
+        }
       }
     });
 

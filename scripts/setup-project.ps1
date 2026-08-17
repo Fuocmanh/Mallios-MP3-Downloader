@@ -170,9 +170,17 @@ if ($pythonExe -and (Test-Path $RequirementsFile)) {
     }
 }
 
-# 6. Cai dat Native Host cho trinh duyet
+# 6. Cai dat Native Host & Cong cu cho he thong
 Write-Host ""
-Write-Host "Dang thiet lap Native Host de Extension tu dong khoi dong Server..." -ForegroundColor Yellow
+Write-Host "Dang thiet lap Native Host & Cong cu chon thu muc..." -ForegroundColor Yellow
+$folderPickerCs = Join-Path $ProjectRoot "tools\FolderPicker.cs"
+$folderPickerExe = Join-Path $ProjectRoot "tools\FolderPicker.exe"
+if ((Test-Path $folderPickerCs) -and (-not (Test-Path $folderPickerExe))) {
+    try {
+        Add-Type -TypeDefinition (Get-Content -Raw $folderPickerCs -Encoding UTF8) -OutputAssembly $folderPickerExe -OutputType ConsoleApplication
+    } catch {}
+}
+
 $nativeHostScript = Join-Path $ProjectRoot "scripts\install-native-host.ps1"
 if (Test-Path $nativeHostScript) {
     try {

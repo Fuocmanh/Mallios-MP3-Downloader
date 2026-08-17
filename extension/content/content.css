@@ -1609,3 +1609,36 @@
   cursor: not-allowed !important;
   transform: none !important;
 }
+
+.yt-reload-extension-btn {
+  background: #282930 !important;
+  border: 1px solid #49454f !important;
+  color: #c2efb3 !important;
+  font-weight: 600 !important;
+  padding: 5px 10px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  transition: all 0.2s ease !important;
+}
+
+.yt-reload-extension-btn:hover {
+  background: rgba(194, 239, 179, 0.15) !important;
+  border-color: #c2efb3 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.yt-reload-extension-btn:active {
+  transform: scale(0.95) !important;
+}
+
+.yt-reload-extension-btn[disabled] {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}

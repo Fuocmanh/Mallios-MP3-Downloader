@@ -209,6 +209,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "reload-extension") {
+    try {
+      chrome.runtime.reload();
+      sendResponse && sendResponse({ ok: true });
+    } catch (e) {
+      sendResponse && sendResponse({ ok: false, error: e.message });
+    }
+    return true;
+  }
+
   if (message?.type === "restart-backend") {
     (async () => {
       try {

@@ -361,16 +361,21 @@
               </label>
             </div>
 
-            <!-- QUẢN LÝ MÁY CHỦ PYTHON -->
+            <!-- QUẢN LÝ TIỆN ÍCH & MÁY CHỦ PYTHON -->
             <div class="yt-server-manage-box">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; flex-direction: column; gap: 2px;">
-                  <span style="color: #c4c6d0; font-size: 11px; font-weight: 600;">🐍 Máy chủ Python (Port 37491):</span>
+                  <span style="color: #c4c6d0; font-size: 11px; font-weight: 600;">🧩 Tiện ích & Máy chủ Python:</span>
                   <span id="yt-server-status-detail" style="color: #8e9099; font-size: 10px;">🟢 Đang hoạt động tốt</span>
                 </div>
-                <button type="button" id="yt-btn-restart-server" class="yt-restart-server-btn" title="Khởi động lại máy chủ Python Backend">
-                  🔄 Reset Python
-                </button>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <button type="button" id="yt-btn-reload-extension" class="yt-reload-extension-btn" title="Khởi động lại toàn bộ Extension & Tải lại trang">
+                    🔄 Reset Extension
+                  </button>
+                  <button type="button" id="yt-btn-restart-server" class="yt-restart-server-btn" title="Khởi động lại máy chủ Python Backend">
+                    🐍 Reset Python
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -773,6 +778,32 @@
     if (restartServerBtn) {
       restartServerBtn.addEventListener('click', restartPythonServer);
     }
+
+    const reloadExtensionBtn = document.getElementById('yt-btn-reload-extension');
+    if (reloadExtensionBtn) {
+      reloadExtensionBtn.addEventListener('click', async () => {
+        const ok = confirm('Bạn có muốn khởi động lại toàn bộ tiện ích Chrome Extension và làm mới trang này?');
+        if (!ok) return;
+
+        reloadExtensionBtn.setAttribute('disabled', 'true');
+        reloadExtensionBtn.innerHTML = '⏳ Đang nạp lại...';
+        showStatus('⏳ Đang khởi động lại tiện ích...', '#a8c7fa');
+
+        try {
+          await chrome.runtime.sendMessage({ type: 'reload-extension' });
+        } catch (_) {}
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      });
+    }
+
+    // Tự động làm mới khi người dùng chuyển video / trang trên YouTube
+    window.addEventListener('yt-navigate-finish', () => {
+      checkInitialProgress();
+      checkServerHealth();
+    });
 
     if (serverStatusBadge) {
       serverStatusBadge.addEventListener('click', async () => {

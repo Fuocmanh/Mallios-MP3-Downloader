@@ -2,32 +2,50 @@ const NATIVE_HOST = "com.mallios.mp3";
 const API_BASE_URL = "http://127.0.0.1:37491";
 
 let nativePort = null;
+let pendingEnsurePromise = null;
 
 function ensureBackendRunning() {
-  return new Promise((resolve) => {
+  if (pendingEnsurePromise) {
+    return pendingEnsurePromise;
+  }
+
+  pendingEnsurePromise = new Promise((resolve) => {
     try {
       if (!nativePort) {
         nativePort = chrome.runtime.connectNative(NATIVE_HOST);
         nativePort.onMessage.addListener((message) => {
-          console.log("[Mallios] Native Host Persistent Response:", message);
+          console.log("[Mallios] Native Host Response:", message);
+          if (message && message.ok) {
+            resolve({ ok: true, status: message.status || "online" });
+          }
         });
         nativePort.onDisconnect.addListener(() => {
-          console.warn("[Mallios] Native Host Disconnected:", chrome.runtime.lastError?.message);
+          const err = chrome.runtime.lastError?.message;
+          console.warn("[Mallios] Native Host Disconnected:", err);
           nativePort = null;
+          resolve({ ok: false, error: err });
         });
       }
       
       nativePort.postMessage({ command: "ensure-running" });
       
+      // Fallback timeout sau 3.5s neu Native Host khong phan hoi kip
       setTimeout(() => {
-          resolve({ ok: true });
-      }, 1000);
+        resolve({ ok: true });
+      }, 3500);
       
     } catch (err) {
       console.error("[Mallios] Exception calling connectNative:", err);
+      nativePort = null;
       resolve({ ok: false, error: err.message });
     }
+  }).finally(() => {
+    setTimeout(() => {
+      pendingEnsurePromise = null;
+    }, 1000);
   });
+
+  return pendingEnsurePromise;
 }
 
 async function proxyApiRequest(path, options = {}) {
@@ -45,10 +63,12 @@ async function proxyApiRequest(path, options = {}) {
     const text = await res.text();
     return { ok: res.ok, status: res.status, body: text };
   } catch (initialError) {
-    ensureBackendRunning();
+    // Tu dong kich hoat server qua Native Host va doi
+    await ensureBackendRunning();
 
-    for (let attempt = 0; attempt < 6; attempt++) {
-      await new Promise((r) => setTimeout(r, 300));
+    // Cho toi da 6 giay (12 lan x 500ms) de may chu boot xong
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await new Promise((r) => setTimeout(r, 500));
       try {
         const retryRes = await fetch(url, fetchOptions);
         const retryText = await retryRes.text();
@@ -63,13 +83,29 @@ async function proxyApiRequest(path, options = {}) {
   }
 }
 
-async function checkServerHealth() {
+async function checkServerHealth(autoWake = true) {
   try {
     const res = await fetch(`${API_BASE_URL}/api/status`, { method: "GET" });
-    return { ok: res.ok, online: res.ok };
-  } catch (_) {
-    return { ok: false, online: false };
+    if (res.ok) {
+      return { ok: true, online: true };
+    }
+  } catch (_) {}
+
+  // Neu server chua bat va autoWake = true, tu dong danh thuc ngam
+  if (autoWake) {
+    ensureBackendRunning();
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        const retryRes = await fetch(`${API_BASE_URL}/api/status`, { method: "GET" });
+        if (retryRes.ok) {
+          return { ok: true, online: true };
+        }
+      } catch (_) {}
+    }
   }
+
+  return { ok: false, online: false };
 }
 async function loginWithGoogleIdentity() {
   return new Promise((resolve) => {

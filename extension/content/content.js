@@ -561,10 +561,9 @@
 
     if (serverStatusBadge) {
       serverStatusBadge.addEventListener('click', async () => {
-        serverStatusBadge.innerText = '⏳ Đang kiểm tra...';
+        serverStatusBadge.innerText = '⏳ Đang khởi động...';
         try {
           await chrome.runtime.sendMessage({ type: 'ensure-backend' });
-          await new Promise(r => setTimeout(r, 600));
           await checkServerHealth();
         } catch (_) {
           updateServerStatusBadge(false);

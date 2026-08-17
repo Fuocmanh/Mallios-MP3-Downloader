@@ -7,14 +7,14 @@ using System.Threading;
 
 public static class MalliosNativeHost
 {
-    private static bool IsBackendAvailable()
+    private static bool IsBackendAvailable(int timeoutMs = 300)
     {
         try
         {
             using (var client = new TcpClient())
             {
                 var connected = client.BeginConnect("127.0.0.1", 37491, null, null);
-                return connected.AsyncWaitHandle.WaitOne(300) && client.Connected;
+                return connected.AsyncWaitHandle.WaitOne(timeoutMs) && client.Connected;
             }
         }
         catch
@@ -130,18 +130,47 @@ public static class MalliosNativeHost
             {
                 if (!ReadMessage()) break;
 
-                if (!IsBackendAvailable())
+                if (!IsBackendAvailable(200))
                 {
-                    StartBackend();
-                    // Wait briefly for server to bind to port 37491
-                    for (int i = 0; i < 15; i++)
+                    bool createdNew;
+                    using (var mutex = new Mutex(false, "Local\\MalliosBackendStartMutex", out createdNew))
+                    {
+                        var hasHandle = false;
+                        try
+                        {
+                            try
+                            {
+                                hasHandle = mutex.WaitOne(4000, false);
+                            }
+                            catch (AbandonedMutexException)
+                            {
+                                hasHandle = true;
+                            }
+
+                            if (!IsBackendAvailable(200))
+                            {
+                                StartBackend();
+                            }
+                        }
+                        finally
+                        {
+                            if (hasHandle)
+                            {
+                                try { mutex.ReleaseMutex(); } catch { }
+                            }
+                        }
+                    }
+
+                    // Cho toi da 6 giay (30 x 200ms) de server Flask bind vao port 37491
+                    for (int i = 0; i < 30; i++)
                     {
                         Thread.Sleep(200);
-                        if (IsBackendAvailable()) break;
+                        if (IsBackendAvailable(300)) break;
                     }
                 }
 
-                WriteMessage("{\"ok\":true}");
+                var isReady = IsBackendAvailable(300);
+                WriteMessage("{\"ok\":" + (isReady ? "true" : "false") + ",\"status\":\"" + (isReady ? "online" : "starting") + "\"}");
             }
             catch (Exception error)
             {

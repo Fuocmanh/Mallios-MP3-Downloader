@@ -133,6 +133,7 @@ if (Test-Path $embeddedPython) {
             }
         } catch {
             $pythonExe = $sysPython.Source
+        }
     } else {
         # Thu cai dat Python tu dong bang winget neu he thong co ho tro
         $wingetCmd = Get-Command "winget" -ErrorAction SilentlyContinue

@@ -952,6 +952,10 @@ function getFileListOutput() {
           updateWindowPosition();
           checkServerHealth();
           checkDriveStatus();
+          // Tự động nạp trước ngầm bài hát trang hiện tại khi mở tiện ích
+          if (window.location.href.includes('watch?v=')) {
+            fetchDirectStreamUrl(window.location.href).catch(() => {});
+          }
         }
       }
     });
@@ -1668,7 +1672,6 @@ function getFileListOutput() {
     }
 
     // --- TRÌNH PHÁT NGHE THỬ ÂM THANH (TAB 2) ---
-    // --- TRÌNH PHÁT NGHE THỬ ÂM THANH (TAB 2) ---
     const previewBar = document.getElementById('yt-preview-player-bar');
     const previewTitle = document.getElementById('yt-preview-title');
     const previewAudio = document.getElementById('yt-preview-audio-element');
@@ -1680,6 +1683,53 @@ function getFileListOutput() {
     const previewSeekBar = document.getElementById('yt-preview-seek-bar');
     const previewCurrentTime = document.getElementById('yt-preview-current-time');
     const previewTotalTime = document.getElementById('yt-preview-total-time');
+
+    if (previewAudio) {
+      previewAudio.preload = 'auto';
+    }
+
+    // --- BỘ NHỚ ĐỆM DIRECT AUDIO STREAM TRỰC TIẾP (PREVIEW STREAM CACHE) ---
+    const previewStreamUrlCache = new Map();
+
+    async function fetchDirectStreamUrl(url) {
+      if (!url) return null;
+      const cleanUrl = url.split('&')[0].trim();
+      if (previewStreamUrlCache.has(cleanUrl)) {
+        return previewStreamUrlCache.get(cleanUrl);
+      }
+      try {
+        const res = await apiFetch(`/api/preview-info?url=${encodeURIComponent(cleanUrl)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'success' && data.direct_url) {
+            previewStreamUrlCache.set(cleanUrl, data.direct_url);
+            return data.direct_url;
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    function preloadPlaylistStreams(items) {
+      if (!items || !items.length) return;
+      const urls = items.map(i => i.url ? i.url.split('&')[0].trim() : '').filter(Boolean);
+      if (urls.length === 0) return;
+
+      // 1. Gửi toàn bộ URLs để backend giải mã song song 8 worker vào RAM
+      apiFetch('/api/preload-playlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: urls })
+      }).catch(() => {});
+
+      // 2. Prefetch trước 5 bài đầu tiên trực tiếp vào Client Map Cache
+      const topUrls = urls.slice(0, 5);
+      topUrls.forEach((u, i) => {
+        setTimeout(() => {
+          fetchDirectStreamUrl(u).catch(() => {});
+        }, i * 120);
+      });
+    }
 
     let currentPlaylistItems = [];
     let currentPreviewIndex = -1;
@@ -1767,7 +1817,14 @@ function getFileListOutput() {
       }
 
       if (previewAudio) {
-        previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
+        const cleanUrl = item.url.split('&')[0].trim();
+        const directUrl = previewStreamUrlCache.get(cleanUrl);
+        if (directUrl) {
+          previewAudio.src = directUrl;
+        } else {
+          previewAudio.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(cleanUrl)}`;
+          fetchDirectStreamUrl(cleanUrl).catch(() => {});
+        }
         previewAudio.load();
         if (shouldPlay) {
           previewAudio.play().catch(err => {
@@ -1776,10 +1833,18 @@ function getFileListOutput() {
         }
       }
 
-      // Nạp trước bài tiếp theo trong nền để chuyển bài siêu mượt
+      // Nạp trước các bài tiếp theo & bài trước trong nền (N+1, N+2, N-1)
       const nextIdx = (index + 1) % currentPlaylistItems.length;
+      const nextIdx2 = (index + 2) % currentPlaylistItems.length;
+      const prevIdx = (index - 1 + currentPlaylistItems.length) % currentPlaylistItems.length;
       if (currentPlaylistItems[nextIdx] && currentPlaylistItems[nextIdx].url) {
-        fetch(`${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(currentPlaylistItems[nextIdx].url)}`).catch(() => {});
+        fetchDirectStreamUrl(currentPlaylistItems[nextIdx].url).catch(() => {});
+      }
+      if (currentPlaylistItems[nextIdx2] && currentPlaylistItems[nextIdx2].url) {
+        fetchDirectStreamUrl(currentPlaylistItems[nextIdx2].url).catch(() => {});
+      }
+      if (currentPlaylistItems[prevIdx] && currentPlaylistItems[prevIdx].url) {
+        fetchDirectStreamUrl(currentPlaylistItems[prevIdx].url).catch(() => {});
       }
     }
 
@@ -2072,7 +2137,7 @@ function getFileListOutput() {
         // Nạp trước ngầm khi di chuột vào bài hát để bấm là phát ngay
         div.addEventListener('mouseenter', () => {
           if (item && item.url) {
-            fetch(`${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`).catch(() => {});
+            fetchDirectStreamUrl(item.url).catch(() => {});
           }
         }, { once: true });
 
@@ -2120,12 +2185,8 @@ function getFileListOutput() {
           }
         }).catch(() => {});
 
-        // Nạp ngầm vào RAM Server
-        apiFetch('/api/preload-playlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ urls: allUrls })
-        }).catch(() => {});
+        // Nạp trước ngầm toàn bộ danh sách vào RAM server & Cache Frontend
+        preloadPlaylistStreams(uniqueItems);
       }
 
       const selectAllBtn = document.getElementById('yt-select-all');
@@ -2565,7 +2626,10 @@ function getFileListOutput() {
         
         const isDrive = item.storage_type === 'drive' || !item.file_path;
         if (isDrive) {
-          audioElement.src = `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(item.url)}`;
+          const cleanUrl = item.url ? item.url.split('&')[0].trim() : '';
+          const directUrl = previewStreamUrlCache.get(cleanUrl);
+          audioElement.src = directUrl || `${API_BASE_URL}/api/preview-stream?url=${encodeURIComponent(cleanUrl)}`;
+          if (!directUrl) fetchDirectStreamUrl(cleanUrl).catch(() => {});
         } else {
           audioElement.src = `${API_BASE_URL}/play?path=${encodeURIComponent(item.file_path)}`;
         }

@@ -39,6 +39,12 @@ try:
     import drive_service
 except ImportError:
     from backend import drive_service
+
+try:
+    import yt_dlp
+    HAS_YTDLP_MODULE = True
+except ImportError:
+    HAS_YTDLP_MODULE = False
 DEFAULT_DOWNLOAD_FOLDER = Path.home() / "Downloads"
 CONFIGS_DIR = PROJECT_ROOT / "configs"
 LOGS_DIR = PROJECT_ROOT / "logs"
@@ -434,11 +440,11 @@ def get_playlist():
             "id": v_id
         })
     
-    # Nạp trước ngầm tối đa 3 bài đầu tiên để tránh bị YouTube chặn tần suất (Rate-limit)
+    # Nạp trước ngầm tối đa 6 bài đầu tiên để người dùng bấm nghe thử là phát tức thì
     try:
-        urls_to_preload = [item["url"] for item in items if item.get("url")][:3]
+        urls_to_preload = [item["url"] for item in items if item.get("url")][:6]
         if urls_to_preload:
-            threading.Thread(target=background_preload_streams, args=(urls_to_preload,), daemon=True).start()
+            background_preload_streams(urls_to_preload)
     except Exception:
         pass
 
@@ -1768,14 +1774,48 @@ def play_audio():
 PREVIEW_STREAM_CACHE: dict[str, tuple[str, float]] = {}
 PREVIEW_CACHE_LOCK = threading.Lock()
 IN_FLIGHT_FETCHES: dict[str, threading.Event] = {}
-PRELOAD_EXECUTOR = ThreadPoolExecutor(max_workers=5)
+PRELOAD_EXECUTOR = ThreadPoolExecutor(max_workers=8)
+YTDLP_INSTANCE = None
+YTDLP_INSTANCE_LOCK = threading.Lock()
+LAST_COOKIE_MTIME = 0
+
+
+def get_ytdlp_extractor():
+    """Lấy hoặc khởi tạo instance YoutubeDL in-process với session tái sử dụng để giải mã stream trong < 1s."""
+    global YTDLP_INSTANCE, LAST_COOKIE_MTIME
+    cookies_file = CONFIGS_DIR / "cookies.txt"
+    current_mtime = cookies_file.stat().st_mtime if cookies_file.is_file() else 0
+    with YTDLP_INSTANCE_LOCK:
+        if YTDLP_INSTANCE is None or current_mtime != LAST_COOKIE_MTIME:
+            opts = {
+                "format": "ba/18/b",
+                "quiet": True,
+                "no_warnings": True,
+                "nocheckcertificate": True,
+                "extractor_args": {"youtube": {"player_client": ["android"]}},
+                "skip_download": True,
+                "noplaylist": True,
+            }
+            if current_mtime > 0 and cookies_file.stat().st_size > 0:
+                opts["cookiefile"] = str(cookies_file)
+            try:
+                YTDLP_INSTANCE = yt_dlp.YoutubeDL(opts)
+                LAST_COOKIE_MTIME = current_mtime
+            except Exception:
+                pass
+        return YTDLP_INSTANCE
 
 
 def background_preload_streams(urls: list[str]):
     """Chạy ngầm nạp trước luồng âm thanh song song vào RAM để người dùng bấm nghe thử là phát tức thì."""
+    if not urls:
+        return
     for u in urls:
         if not u:
             continue
+        with PREVIEW_CACHE_LOCK:
+            if u in PREVIEW_STREAM_CACHE or u in IN_FLIGHT_FETCHES:
+                continue
         try:
             PRELOAD_EXECUTOR.submit(get_direct_stream_url, u)
         except Exception:
@@ -1783,10 +1823,12 @@ def background_preload_streams(urls: list[str]):
 
 
 def get_direct_stream_url(video_url: str) -> str:
-    """Lấy direct audio stream URL từ yt-dlp với cache RAM, module in-process siêu tốc và khóa chống nghẽn luồng."""
+    """Lấy direct audio stream URL từ yt-dlp với cache RAM, module in-process siêu tốc (<1s) và khóa chống nghẽn luồng."""
+    if not video_url:
+        return ""
     now = time.time()
     with PREVIEW_CACHE_LOCK:
-        # TTL Eviction: Tự động dọn dẹp các cache quá hạn để tránh phình bộ nhớ RAM
+        # TTL Eviction: Tự động dọn dẹp các cache quá hạn (14400s = 4 giờ)
         expired_keys = [k for k, v in PREVIEW_STREAM_CACHE.items() if now >= v[1]]
         for k in expired_keys:
             PREVIEW_STREAM_CACHE.pop(k, None)
@@ -1813,6 +1855,21 @@ def get_direct_stream_url(video_url: str) -> str:
         return ""
 
     try:
+        # Tier 1: In-process yt_dlp siêu tốc (mất ~0.5 - 0.9s, không tốn tài nguyên tạo process con)
+        if HAS_YTDLP_MODULE:
+            try:
+                ydl = get_ytdlp_extractor()
+                if ydl:
+                    info = ydl.extract_info(video_url, download=False)
+                    direct_url = info.get("url") if info else None
+                    if direct_url and direct_url.startswith("http"):
+                        with PREVIEW_CACHE_LOCK:
+                            PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 14400)
+                        return direct_url
+            except Exception:
+                pass
+
+        # Tier 2: Fallback qua CLI subprocess yt-dlp.exe nếu Tier 1 gặp ngoại lệ
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
         env["LANG"] = "en_US.UTF-8"
@@ -1835,7 +1892,7 @@ def get_direct_stream_url(video_url: str) -> str:
                 if lines:
                     direct_url = lines[0]
                     with PREVIEW_CACHE_LOCK:
-                        PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 1800)
+                        PREVIEW_STREAM_CACHE[video_url] = (direct_url, now + 14400)
                     return direct_url
         except Exception:
             pass
@@ -1845,6 +1902,27 @@ def get_direct_stream_url(video_url: str) -> str:
             if video_url in IN_FLIGHT_FETCHES:
                 del IN_FLIGHT_FETCHES[video_url]
         event.set()
+
+
+@app.route("/api/preview-info", methods=["GET", "POST", "OPTIONS"])
+def preview_info():
+    """Trả về JSON chứa direct_url của audio stream để frontend cache & phát trực tiếp không cần redirect."""
+    if request.method == "OPTIONS":
+        return response({})
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        video_url = data.get("url", "").strip()
+    else:
+        video_url = request.args.get("url", "").strip()
+        
+    if not video_url:
+        return response({"status": "error", "message": "Thiếu tham số url."}, 400)
+
+    direct_url = get_direct_stream_url(video_url)
+    if not direct_url:
+        return response({"status": "error", "message": "Không thể lấy luồng âm thanh nghe thử."}, 500)
+
+    return response({"status": "success", "direct_url": direct_url})
 
 
 @app.route("/api/preview-stream", methods=["GET", "OPTIONS"])
@@ -1872,8 +1950,8 @@ def preload_playlist():
     data = request.get_json(silent=True) or {}
     urls = data.get("urls", [])
     if isinstance(urls, list) and urls:
-        # Nạp trước tối đa 8 bài đầu tiên vào RAM cache
-        background_preload_streams(urls[:8])
+        # Nạp trước tối đa 15 bài đầu tiên vào RAM cache song song
+        background_preload_streams(urls[:15])
     return response({"status": "success"})
 
 

@@ -1041,7 +1041,7 @@ function getFileListOutput() {
       }
     }
 
-    function updateBubbleDownloadProgress(status, percent = 0) {
+    function updateBubbleDownloadProgress(status, percent = 0, message = '') {
       const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
       const pctEl = document.getElementById('yt-bubble-dl-pct');
       const badgeEl = document.getElementById('yt-bubble-dl-badge');
@@ -1062,7 +1062,7 @@ function getFileListOutput() {
         if (trackEl) trackEl.style.display = 'block';
         if (fillEl) fillEl.style.width = `${p}%`;
         if (islandTitle && !bubble.classList.contains('is-playing')) {
-          islandTitle.textContent = `⬇️ Đang tải: ${p}%`;
+          islandTitle.textContent = message ? `⬇️ ${p}%: ${message}` : `⬇️ Đang tải: ${p}%`;
         }
       } else {
         bubble.classList.remove('is-downloading');
@@ -1071,6 +1071,8 @@ function getFileListOutput() {
         }
         if (trackEl) trackEl.style.display = 'none';
         if (fillEl) fillEl.style.width = '0%';
+        if (pctEl) pctEl.textContent = '0%';
+        if (badgeEl) badgeEl.textContent = '0%';
       }
     }
 
@@ -1302,136 +1304,216 @@ function getFileListOutput() {
 
     let progressInterval = null;
 
-    function startProgressPolling(btn, originalContent) {
-      if (progressInterval) clearInterval(progressInterval);
-      
-      btn.setAttribute('disabled', 'true');
-      bubble.classList.add('loading');
-      updateBubbleDownloadProgress('running', 0);
-      renderDuplicateList([]);
-      
+    function getActiveDownloadBtnInfo() {
+      const activeTab = document.querySelector('.yt-mp3-tab-btn.active');
+      const quickBtn = document.getElementById('yt-btn-quick-download');
+      const selectBtn = document.getElementById('yt-btn-download-selected');
+      const countSpan = document.getElementById('yt-select-count');
+      const count = countSpan ? countSpan.innerText : '0';
+
+      if (activeTab && activeTab.id === 'yt-tab-select-btn' && selectBtn) {
+        return {
+          btn: selectBtn,
+          origContent: `${SVG.check} Tải đã chọn ( <span id="yt-select-count">${count}</span> )`
+        };
+      }
+      return {
+        btn: quickBtn,
+        origContent: `${SVG.download} TẢI NGAY MP3`
+      };
+    }
+
+    function restoreAllDownloadButtons() {
+      const quickBtn = document.getElementById('yt-btn-quick-download');
+      const selectBtn = document.getElementById('yt-btn-download-selected');
+      if (quickBtn) {
+        quickBtn.removeAttribute('disabled');
+        quickBtn.innerHTML = `${SVG.download} TẢI NGAY MP3`;
+      }
+      if (selectBtn) {
+        selectBtn.removeAttribute('disabled');
+        const countSpan = document.getElementById('yt-select-count');
+        const count = countSpan ? countSpan.innerText : '0';
+        selectBtn.innerHTML = `${SVG.check} Tải đã chọn ( <span id="yt-select-count">${count}</span> )`;
+      }
+    }
+
+    function applyProgressData(data) {
+      if (!data) return;
+
+      const quickBtn = document.getElementById('yt-btn-quick-download');
+      const selectBtn = document.getElementById('yt-btn-download-selected');
       const ctrlBox = document.getElementById('yt-download-ctrl-box');
       const retryBtn = document.getElementById('yt-btn-retry-failed');
       const cancelBtn = document.getElementById('yt-btn-cancel-download');
-      
-      if (ctrlBox) {
-        ctrlBox.style.display = 'flex';
-        cancelBtn.style.display = 'block';
-        retryBtn.style.display = 'none';
+
+      if (data.status === 'running') {
+        if (quickBtn) quickBtn.setAttribute('disabled', 'true');
+        if (selectBtn) selectBtn.setAttribute('disabled', 'true');
+        bubble.classList.add('loading');
+        updateBubbleDownloadProgress('running', data.percent || 0, data.message);
+        showStatus(`⏳ ${data.message || 'Đang xử lý tải MP3...'}`, '#a8c7fa');
+        renderDuplicateList(data.duplicate_files);
+
+        if (ctrlBox) {
+          ctrlBox.style.display = 'flex';
+          if (cancelBtn) cancelBtn.style.display = 'block';
+          if (retryBtn) retryBtn.style.display = 'none';
+        }
+
+        const activeInfo = getActiveDownloadBtnInfo();
+        if (activeInfo.btn) {
+          activeInfo.btn.innerHTML = data.percent > 0 ? `⏳ ${data.percent}%` : `⏳ Đang tải...`;
+        }
+      } else if (data.status === 'completed') {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+        bubble.classList.remove('loading');
+        updateBubbleDownloadProgress('idle');
+        showStatus(`🎉 ${data.message || 'Đã tải thành công vào thư mục!'}`, '#c2efb3');
+        renderDuplicateList(data.duplicate_files);
+        restoreAllDownloadButtons();
+        updateCount();
+        if (typeof loadHistoryList === 'function' && !document.hidden) {
+          loadHistoryList();
+        }
+
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (data.has_failed && retryBtn) {
+          retryBtn.style.display = 'block';
+        } else if (ctrlBox) {
+          ctrlBox.style.display = 'none';
+        }
+      } else if (data.status === 'failed') {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+        bubble.classList.remove('loading');
+        updateBubbleDownloadProgress('idle');
+        showStatus(`❌ ${data.error || data.message || 'Tải thất bại.'}`, '#f2b8b5');
+        renderDuplicateList(data.duplicate_files);
+        restoreAllDownloadButtons();
+        updateCount();
+
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (data.has_failed && retryBtn) {
+          retryBtn.style.display = 'block';
+        } else if (ctrlBox) {
+          ctrlBox.style.display = 'none';
+        }
+      } else if (data.status === 'cancelled') {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+        bubble.classList.remove('loading');
+        updateBubbleDownloadProgress('idle');
+        showStatus(`🛑 ${data.message || 'Đã ngưng tải.'}`, '#ffb4ab');
+        renderDuplicateList(data.duplicate_files);
+        restoreAllDownloadButtons();
+        updateCount();
+
+        if (ctrlBox) ctrlBox.style.display = 'none';
+      } else if (data.status === 'idle') {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+        bubble.classList.remove('loading');
+        updateBubbleDownloadProgress('idle');
+        restoreAllDownloadButtons();
+        if (ctrlBox) ctrlBox.style.display = 'none';
       }
-      
+    }
+
+    function startProgressPolling(btn, originalContent) {
+      if (progressInterval) clearInterval(progressInterval);
+
+      applyProgressData({ status: 'running', percent: 0, message: 'Đang chuẩn bị tải...' });
+
       progressInterval = setInterval(async () => {
         try {
           const res = await apiFetch('/api/progress', { method: 'GET' });
           const data = await res.json();
-          
-          if (data.status === 'running') {
-            showStatus(`⏳ ${data.message}`, '#a8c7fa');
-            renderDuplicateList(data.duplicate_files);
-            btn.innerHTML = data.percent > 0 ? `⏳ ${data.percent}%` : `⏳ Đang kiểm tra...`;
-            updateBubbleDownloadProgress('running', data.percent || 0);
-          } else if (data.status === 'completed') {
-            clearInterval(progressInterval);
-            progressInterval = null;
-            showStatus(`🎉 ${data.message || 'Đã tải thành công vào thư mục!'}`, '#c2efb3');
-            renderDuplicateList(data.duplicate_files);
-            btn.removeAttribute('disabled');
-            bubble.classList.remove('loading');
-            updateBubbleDownloadProgress('idle');
-            btn.innerHTML = originalContent;
-            updateCount();
-            
-            try {
-              chrome.runtime.sendMessage({
-                type: "show-notification",
-                title: "🎉 Mallios MP3",
-                message: data.message || "Tất cả bài hát đã được tải về thành công!"
-              });
-            } catch (_) {}
-
-            if (cancelBtn) cancelBtn.style.display = 'none';
-            if (data.has_failed && retryBtn) {
-              retryBtn.style.display = 'block';
-            } else if (ctrlBox) {
-              ctrlBox.style.display = 'none';
-            }
-          } else if (data.status === 'failed') {
-            clearInterval(progressInterval);
-            progressInterval = null;
-            showStatus(`❌ ${data.error || data.message || 'Tải thất bại.'}`, '#f2b8b5');
-            renderDuplicateList(data.duplicate_files);
-            btn.removeAttribute('disabled');
-            bubble.classList.remove('loading');
-            updateBubbleDownloadProgress('idle');
-            btn.innerHTML = originalContent;
-            updateCount();
-            
-            if (cancelBtn) cancelBtn.style.display = 'none';
-            if (data.has_failed && retryBtn) {
-              retryBtn.style.display = 'block';
-            } else if (ctrlBox) {
-              ctrlBox.style.display = 'none';
-            }
-          } else if (data.status === 'cancelled') {
-            clearInterval(progressInterval);
-            progressInterval = null;
-            showStatus(`🛑 ${data.message || 'Đã ngưng tải.'}`, '#ffb4ab');
-            renderDuplicateList(data.duplicate_files);
-            btn.removeAttribute('disabled');
-            bubble.classList.remove('loading');
-            updateBubbleDownloadProgress('idle');
-            btn.innerHTML = originalContent;
-            updateCount();
-            
-            if (ctrlBox) ctrlBox.style.display = 'none';
-          }
+          applyProgressData(data);
         } catch (err) {
-          clearInterval(progressInterval);
-          progressInterval = null;
-          showStatus('❌ Lỗi kết nối kiểm tra tiến trình!', '#f2b8b5');
-          btn.removeAttribute('disabled');
+          if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+          }
           bubble.classList.remove('loading');
           updateBubbleDownloadProgress('idle');
-          btn.innerHTML = originalContent;
+          restoreAllDownloadButtons();
           updateCount();
-          if (ctrlBox) ctrlBox.style.display = 'none';
         }
-      }, 350);
+      }, 500);
     }
 
     async function checkInitialProgress() {
+      if (document.hidden) return;
       try {
         const res = await apiFetch('/api/progress', { method: 'GET' });
         const data = await res.json();
-        
-        const ctrlBox = document.getElementById('yt-download-ctrl-box');
-        const retryBtn = document.getElementById('yt-btn-retry-failed');
-        const cancelBtn = document.getElementById('yt-btn-cancel-download');
-        
-        if (data.status === 'running') {
-          const activeTab = document.querySelector('.yt-mp3-tab-btn.active');
-          let btn = document.getElementById('yt-btn-quick-download');
-          let origContent = `${SVG.download} TẢI NGAY MP3`;
-          if (activeTab && activeTab.id === 'yt-tab-select-btn') {
-            btn = document.getElementById('yt-btn-download-selected');
-            const countSpan = document.getElementById('yt-select-count');
-            const count = countSpan ? countSpan.innerText : '0';
-            origContent = `${SVG.check} Tải đã chọn ( <span id="yt-select-count">${count}</span> )`;
-          }
-          startProgressPolling(btn, origContent);
-        } else {
-          if (data.status === 'cancelled') {
-            if (ctrlBox) ctrlBox.style.display = 'none';
-          } else if (data.has_failed) {
-            if (ctrlBox) ctrlBox.style.display = 'flex';
-            if (retryBtn) retryBtn.style.display = 'block';
-            if (cancelBtn) cancelBtn.style.display = 'none';
-          } else {
-            if (ctrlBox) ctrlBox.style.display = 'none';
-          }
-        }
+        applyProgressData(data);
       } catch (_) {}
     }
+
+    // Lắng nghe sự kiện đồng bộ từ Background (Context Menu & Background Downloads)
+    try {
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message?.type === 'mallios-download-started') {
+          applyProgressData({ status: 'running', percent: 0, message: 'Đang tải bài hát từ Menu chuột phải...' });
+          sendResponse && sendResponse({ ok: true });
+          return true;
+        }
+
+        if (message?.type === 'mallios-download-progress') {
+          applyProgressData(message.data);
+          sendResponse && sendResponse({ ok: true });
+          return true;
+        }
+
+        if (message?.type === 'mallios-download-completed') {
+          applyProgressData(message.data || { status: 'completed' });
+          sendResponse && sendResponse({ ok: true });
+          return true;
+        }
+
+        if (message?.type === 'mallios-download-failed') {
+          applyProgressData(message.data || { status: 'failed' });
+          sendResponse && sendResponse({ ok: true });
+          return true;
+        }
+
+        if (message?.type === 'mallios-download-cancelled') {
+          applyProgressData(message.data || { status: 'cancelled' });
+          sendResponse && sendResponse({ ok: true });
+          return true;
+        }
+
+        if (message?.type === 'mallios-download-busy') {
+          showStatus(`⚠️ ${message.data?.message || 'Máy chủ đang bận xử lý lượt tải khác.'}`, '#f2b8b5');
+          sendResponse && sendResponse({ ok: true });
+          return true;
+        }
+
+        return false;
+      });
+    } catch (_) {}
+
+    // Tự động kiểm tra tiến trình khi người dùng chuyển lại tab (Tab Visibility / Focus)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        checkInitialProgress();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      checkInitialProgress();
+    });
 
     async function performDownload(payload, btn, originalContent) {
       if (progressInterval) {

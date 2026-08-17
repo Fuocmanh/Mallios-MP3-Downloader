@@ -168,6 +168,31 @@ async function syncYouTubeCookies() {
   });
 }
 
+let lastNotificationTime = 0;
+let lastNotificationMessage = "";
+
+function showSingleNotification(title, message, priority = 2) {
+  const now = Date.now();
+  if (message === lastNotificationMessage && now - lastNotificationTime < 2500) {
+    return;
+  }
+  lastNotificationTime = now;
+  lastNotificationMessage = message;
+
+  const notifId = "mallios-single-notification";
+  try {
+    chrome.notifications.clear(notifId, () => {
+      chrome.notifications.create(notifId, {
+        type: "basic",
+        iconUrl: "icons/bear-icon.png",
+        title: title || "Mallios MP3 Downloader",
+        message: message || "Tải nhạc hoàn tất!",
+        priority: priority
+      });
+    });
+  } catch (_) {}
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "sync-cookies") {
     syncYouTubeCookies().then(sendResponse);
@@ -195,23 +220,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "show-notification") {
-    try {
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: "icons/bear-icon.png",
-        title: message.title || "Mallios MP3 Downloader",
-        message: message.message || "Tải nhạc hoàn tất!",
-        priority: 2
-      });
-      sendResponse({ ok: true });
-    } catch (e) {
-      sendResponse({ ok: false, error: e.message });
-    }
+    showSingleNotification(message.title, message.message, 2);
+    sendResponse({ ok: true });
     return true;
   }
 
   return false;
 });
+
+function broadcastToTabs(message) {
+  try {
+    chrome.tabs.query({}, (tabs) => {
+      if (tabs && tabs.length > 0) {
+        for (const tab of tabs) {
+          if (tab && tab.id) {
+            chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+          }
+        }
+      }
+    });
+  } catch (_) {}
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   try {
@@ -228,15 +257,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const targetUrl = info.linkUrl || info.srcUrl || info.pageUrl || tab?.url;
     if (!targetUrl) return;
 
-    try {
-      chrome.notifications.create("mallios-download-start", {
-        type: "basic",
-        iconUrl: "icons/bear-icon.png",
-        title: "⚡ Mallios MP3",
-        message: "Đang tải bài hát trong nền...",
-        priority: 1
-      });
-    } catch (_) {}
+    showSingleNotification("⚡ Mallios MP3", "Đang tải bài hát trong nền...", 1);
+
+    // Phát sóng sự kiện bắt đầu tải ngay tới các tab content script
+    broadcastToTabs({ type: "mallios-download-started", url: targetUrl });
 
     try {
       // Đọc các thiết lập người dùng đã lưu từ giao diện tiện ích
@@ -281,42 +305,34 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         let pollCount = 0;
         const interval = setInterval(async () => {
           pollCount++;
-          if (pollCount > 120) { // Tối đa 2 phút
+          if (pollCount > 1200) { // Tối đa 10 phút cho video/playlist dài
             clearInterval(interval);
             return;
           }
           try {
             const progRes = await proxyApiRequest("/api/progress");
             const progData = JSON.parse(progRes.body || "{}");
+            
+            // Đồng bộ tiến trình liên tục tới giao diện nút nổi trên web
+            broadcastToTabs({ type: "mallios-download-progress", data: progData });
+
             if (progData.status === "completed") {
               clearInterval(interval);
-              chrome.notifications.create("mallios-download-done-" + Date.now(), {
-                type: "basic",
-                iconUrl: "icons/bear-icon.png",
-                title: "🎉 Mallios MP3 - Hoàn tất!",
-                message: progData.message || "Đã tải bài hát thành công!",
-                priority: 2
-              });
+              broadcastToTabs({ type: "mallios-download-completed", data: progData });
+              showSingleNotification("🎉 Mallios MP3 - Hoàn tất!", progData.message || "Đã tải bài hát thành công!", 2);
             } else if (progData.status === "failed") {
               clearInterval(interval);
-              chrome.notifications.create("mallios-download-err-" + Date.now(), {
-                type: "basic",
-                iconUrl: "icons/bear-icon.png",
-                title: "❌ Mallios MP3 - Lỗi tải nhạc",
-                message: progData.message || "Tải bài hát thất bại!",
-                priority: 2
-              });
+              broadcastToTabs({ type: "mallios-download-failed", data: progData });
+              showSingleNotification("❌ Mallios MP3 - Lỗi tải nhạc", progData.message || "Tải bài hát thất bại!", 2);
+            } else if (progData.status === "cancelled") {
+              clearInterval(interval);
+              broadcastToTabs({ type: "mallios-download-cancelled", data: progData });
             }
           } catch (_) {}
-        }, 1000);
+        }, 500);
       } else {
-        chrome.notifications.create("mallios-download-busy-" + Date.now(), {
-          type: "basic",
-          iconUrl: "icons/bear-icon.png",
-          title: "⚠️ Mallios MP3",
-          message: data.message || "Máy chủ đang bận xử lý lượt tải khác.",
-          priority: 1
-        });
+        broadcastToTabs({ type: "mallios-download-busy", data: data });
+        showSingleNotification("⚠️ Mallios MP3", data.message || "Máy chủ đang bận xử lý lượt tải khác.", 1);
       }
     } catch (e) {
       console.warn("[Mallios Context Menu] Lỗi gửi lệnh tải:", e);

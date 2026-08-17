@@ -953,7 +953,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
             process = subprocess.Popen(
                 [str(YTDLP_PATH), *arguments],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
@@ -975,6 +975,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                 ACTIVE_PROCESSES[state_key] = process
 
             percent_regex = re.compile(r'\[download\]\s+([0-9\.]+)%')
+            output_lines = []
 
             while True:
                 if CANCEL_REQUESTED:
@@ -985,6 +986,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                 line_str = line.strip()
                 if not line_str:
                     continue
+                output_lines.append(line_str)
 
                 if "[download] Destination:" in line_str:
                     with PROGRESS_LOCK:
@@ -1010,13 +1012,15 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                         PARALLEL_PROGRESS[state_key]["percent"] = 95.0
                         PARALLEL_PROGRESS[state_key]["message"] = "Đang nhúng bìa & chuyển MP3..."
 
-            stdout_rem, stderr_data = process.communicate()
+            stdout_rem, _ = process.communicate()
+            if stdout_rem:
+                output_lines.append(stdout_rem.strip())
             returncode = process.returncode
 
             with ACTIVE_PROCESSES_LOCK:
                 ACTIVE_PROCESSES.pop(state_key, None)
 
-            combined_output = f"{stdout_rem}\n{stderr_data}"
+            combined_output = "\n".join(output_lines)
 
             if returncode != 0 and not retried_auth:
                 if is_cookie_auth_error(combined_output):
@@ -1220,16 +1224,16 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                 
                 # Trích xuất dòng thông báo lỗi thực tế để hiện rõ ràng trên UI
                 clean_err = "Lỗi yt-dlp"
-                if stderr_data:
-                    err_lines = [l.strip() for l in stderr_data.splitlines() if "ERROR:" in l or "Warning:" in l]
+                if combined_output:
+                    err_lines = [l.strip() for l in combined_output.splitlines() if "ERROR:" in l or "Warning:" in l]
                     if err_lines:
                         clean_err = err_lines[-1].replace("ERROR:", "").strip()
                     else:
-                        clean_err = stderr_data.strip().splitlines()[-1] if stderr_data.strip() else "Lỗi không xác định"
+                        clean_err = combined_output.strip().splitlines()[-1] if combined_output.strip() else "Lỗi không xác định"
                 
                 PARALLEL_PROGRESS[state_key]["message"] = f"Lỗi: {clean_err}"
                 
-                error_msg = f"yt-dlp error code {returncode} for link {link}. Stderr: {stderr_data}"
+                error_msg = f"yt-dlp error code {returncode} for link {link}. Output: {combined_output}"
                 with open(LOGS_DIR / "error.log", "a", encoding="utf-8") as f:
                     f.write(f"\n--- SINGLE DOWNLOAD ERROR ---\n{error_msg}\n")
                 

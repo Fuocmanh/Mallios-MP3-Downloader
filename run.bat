@@ -36,6 +36,11 @@ if exist "tools\yt-dlp.exe" (
     start /b "" "tools\yt-dlp.exe" -U --no-check-certificate >nul 2>&1
 )
 
+rem Giai phong port 37491 neu co tien trinh cu dang chiem giu
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :37491 ^| findstr LISTENING') do (
+    taskkill /f /pid %%a >nul 2>&1
+)
+
 echo ======================================================
 echo   MAY CHU DANG CHAY TAI: http://127.0.0.1:37491
 echo   (Vui long de cua so nay mo khi su dung Extension)

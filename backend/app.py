@@ -317,6 +317,40 @@ def status():
     })
 
 
+def restart_server_process():
+    time.sleep(0.5)
+    try:
+        cleanup_orphaned_processes()
+    except Exception:
+        pass
+
+    python_exe = sys.executable
+    app_file = str(BACKEND_DIR / "app.py")
+    kwargs = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+    try:
+        subprocess.Popen(
+            [python_exe, app_file],
+            cwd=str(PROJECT_ROOT),
+            **kwargs
+        )
+    except Exception as e:
+        print(f"[RESTART] Failed to spawn new process: {e}")
+
+    os._exit(0)
+
+
+@app.route("/api/restart", methods=["POST", "OPTIONS"])
+@app.route("/restart", methods=["POST", "OPTIONS"])
+def restart_server():
+    if request.method == "OPTIONS":
+        return response({})
+    threading.Thread(target=restart_server_process, daemon=True).start()
+    return response({"status": "success", "message": "Máy chủ Python đang khởi động lại..."})
+
+
 @app.route("/api/default-folder", methods=["GET", "OPTIONS"])
 def default_folder():
     if request.method == "OPTIONS":
@@ -780,6 +814,38 @@ def add_to_history(
         save_history(history)
 
 
+def build_output_template(custom_template: str, item_index: int = 1, no_subfolder: bool = False) -> str:
+    """Chuyển đổi các biến {placeholder} sang định dạng template chuẩn của yt-dlp."""
+    template = (custom_template or "").strip()
+    if not template:
+        template = "%(title)s" if no_subfolder else "%(uploader)s/%(title)s"
+    else:
+        template = template.replace("\\", "/")
+        # Xóa đuôi file nếu người dùng tự gõ .mp3 hoặc .{ext}
+        for ext_suffix in [".mp3", ".%(ext)s", ".{ext}"]:
+            if template.lower().endswith(ext_suffix.lower()):
+                template = template[:-len(ext_suffix)]
+
+        replacements = {
+            "{title}": "%(title)s",
+            "{artist}": "%(artist,creator,uploader)s",
+            "{uploader}": "%(uploader)s",
+            "{channel}": "%(channel,uploader)s",
+            "{id}": "%(id)s",
+            "{album}": "%(album,playlist,title)s",
+            "{year}": "%(release_year,upload_date>%Y)s",
+            "{date}": "%(upload_date)s",
+            "{ext}": "%(ext)s",
+            "{index}": f"%(playlist_index&{{:02d}}|{item_index:02d})s",
+            "{playlist_index}": f"%(playlist_index&{{:02d}}|{item_index:02d})s",
+        }
+        for tag, ytdlp_tag in replacements.items():
+            pattern = re.compile(re.escape(tag), re.IGNORECASE)
+            template = pattern.sub(ytdlp_tag, template)
+
+    return f"{template}.%(ext)s"
+
+
 def find_duplicate_fast(url: str, save_target: str, save_folder: Path) -> tuple[bool, dict | None]:
     """Kiểm tra trùng lặp siêu tốc từ RAM bằng Video ID (< 0.001ms) không cần chạy lệnh phụ."""
     video_id = extract_youtube_video_id(url)
@@ -797,7 +863,15 @@ def find_duplicate_fast(url: str, save_target: str, save_folder: Path) -> tuple[
     return False, None
 
 
-def run_single_download(link: str, quality: str, save_folder: Path, state_key: str, save_target: str = "local", options: dict = None):
+def run_single_download(
+    link: str,
+    quality: str,
+    save_folder: Path,
+    state_key: str,
+    save_target: str = "local",
+    options: dict = None,
+    item_index: int = 1
+):
     global PARALLEL_PROGRESS, MATCHING_DUPLICATE_FILES
     temp_dl_dir = None
     temp_drive_dir = None
@@ -808,6 +882,8 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     embed_thumbnail = bool(options.get("embed_thumbnail", False))
     no_subfolder = bool(options.get("no_subfolder", False))
     skip_metadata = bool(options.get("skip_metadata", False))
+    keep_vietnamese_accents = bool(options.get("keep_vietnamese_accents", False) or options.get("keep_accents", False))
+    custom_template = str(options.get("custom_template", "") or options.get("naming_template", "")).strip()
     
     if CANCEL_REQUESTED:
         with PROGRESS_LOCK:
@@ -848,7 +924,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     try:
         before_files = {
             str(p.resolve()) 
-            for p in list(effective_save_folder.glob("*.mp3")) + list(effective_save_folder.glob("*/*.mp3"))
+            for p in effective_save_folder.rglob("*.mp3")
         }
     except Exception:
         pass
@@ -865,7 +941,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
     if enable_loudnorm:
         postprocessor_args += " -af loudnorm=I=-16:TP=-1.5:LRA=11"
 
-    output_template = "%(title)s.%(ext)s" if no_subfolder else "%(uploader)s/%(title)s.%(ext)s"
+    output_template = build_output_template(custom_template, item_index=item_index, no_subfolder=no_subfolder)
 
     arguments = [
         "--encoding", "utf-8",
@@ -917,12 +993,7 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
         return
 
     try:
-        # Tối đa 2 lượt cho cùng một bài:
-        # lượt 1 dùng cookie hiện tại;
-        # nếu lỗi xác thực -> refresh browser cookie -> thử lại ngay.
-        # Nếu lỗi rate-limit -> chuyển sang client ios/mweb độc lập.
         retried_auth = False
-
         while True:
             process = subprocess.Popen(
                 [str(YTDLP_PATH), *arguments],
@@ -1007,22 +1078,14 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                             PARALLEL_PROGRESS[state_key]["status"] = "downloading"
                             PARALLEL_PROGRESS[state_key]["message"] = "Cookie lỗi, đang làm mới cookie từ browser..."
                         continue
-
-                    # Không có browser -> thử đúng một lần không cookie.
                     if "--cookies" in arguments:
                         arguments = [
                             arg for arg in arguments
                             if arg != "--cookies" and arg != str(CONFIGS_DIR / "cookies.txt")
                         ]
-                        with PROGRESS_LOCK:
-                            PARALLEL_PROGRESS[state_key]["started"] = False
-                            PARALLEL_PROGRESS[state_key]["percent"] = 0.0
-                            PARALLEL_PROGRESS[state_key]["status"] = "downloading"
-                            PARALLEL_PROGRESS[state_key]["message"] = "Không có browser, thử tải không cookie..."
                         continue
                 elif any(phrase in combined_output for phrase in ["rate-limited", "This content isn't available", "Requested format", "403", "Forbidden", "Error opening output files"]):
                     retried_auth = True
-                    # Chuyển sang format tương thích cao và client dự phòng
                     new_args = []
                     skip_next = False
                     for idx, arg in enumerate(arguments):
@@ -1039,22 +1102,16 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                         new_args.append(arg)
                     new_args.extend(["--extractor-args", "youtube:player_client=android,web", "--sleep-requests", "1"])
                     arguments = new_args
-                    with PROGRESS_LOCK:
-                        PARALLEL_PROGRESS[state_key]["started"] = False
-                        PARALLEL_PROGRESS[state_key]["percent"] = 0.0
-                        PARALLEL_PROGRESS[state_key]["status"] = "downloading"
-                        PARALLEL_PROGRESS[state_key]["message"] = "Đang đổi phương thức tải dự phòng..."
                     continue
-
             break
 
-        # Đổi tên file và thư mục để xóa dấu tiếng Việt sau khi hoàn thành tải xuống thành công
+        # Làm sạch tên file và thư mục sau khi hoàn thành tải xuống
         if returncode in {0, 101}:
             try:
-                # Quét lại danh sách file sau khi tải xong (chỉ quét thư mục gốc và thư mục con cấp 1)
-                after_files = list(effective_save_folder.glob("*.*")) + list(effective_save_folder.glob("*/*.*"))
+                # Quét lại danh sách file mới tạo sau khi tải xong
+                after_files = list(effective_save_folder.rglob("*.*"))
                 new_files = [p for p in after_files if str(p.resolve()) not in before_files]
-                
+
                 for original_file in new_files:
                     if original_file.is_file():
                         if original_file.suffix.lower() != ".mp3":
@@ -1064,65 +1121,67 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                                 pass
                             continue
 
-                        clean_title_raw = clean_video_title(original_file.stem)
-                        clean_filename = remove_vietnamese_accents(clean_title_raw) + ".mp3"
-                        original_parent = original_file.parent
-                        clean_parent_name = remove_vietnamese_accents(original_parent.name)
-                        
-                        final_file_path = original_file
-                        
-                        # Chỉ đổi tên nếu thực sự có dấu cần xóa hoặc cần làm sạch tên
-                        if original_file.name != clean_filename or original_parent.name != clean_parent_name:
-                            if original_parent != effective_save_folder:
-                                clean_parent = original_parent.parent / clean_parent_name
-                            else:
-                                clean_parent = original_parent
-                                
-                            final_parent = original_parent
-                            if original_parent != clean_parent:
-                                if clean_parent.is_dir():
-                                    final_parent = clean_parent
-                                else:
-                                    # Thêm cơ chế thử lại để tránh lỗi khóa tệp tạm thời trên Windows
-                                    for attempt in range(10):
-                                        try:
-                                            original_parent.rename(clean_parent)
-                                            final_parent = clean_parent
-                                            # Cập nhật đường dẫn tệp sau khi thư mục cha bị đổi tên (tránh WinError 3)
-                                            original_file = final_parent / original_file.name
-                                            break
-                                        except (PermissionError, OSError):
-                                            if attempt < 9:
-                                                time.sleep(1.0)
-                                            else:
-                                                raise
-                                        
-                            final_file_path = final_parent / clean_filename
-                            if original_file != final_file_path:
-                                if final_file_path.is_file():
-                                    try:
-                                        final_file_path.unlink()
-                                    except Exception:
-                                        pass
-                                
-                                # Thêm cơ chế thử lại đổi tên tệp (tránh WinError 32 và WinError 5)
-                                for attempt in range(10):
-                                    try:
-                                        original_file.rename(final_file_path)
-                                        break
-                                    except (PermissionError, OSError):
-                                        if attempt < 9:
-                                            time.sleep(1.0)
-                                        else:
-                                            raise
-                                
-                            # Dọn dẹp thư mục cũ có dấu nếu nó trống sau khi chuyển file đi
-                            if original_parent != final_parent and original_parent.is_dir():
+                        try:
+                            rel_path = original_file.resolve().relative_to(effective_save_folder.resolve())
+                            parts = list(rel_path.parts)
+                        except Exception:
+                            parts = [original_file.name]
+
+                        # Làm sạch tên thư mục cha
+                        clean_dir_parts = []
+                        for p_idx, part in enumerate(parts[:-1]):
+                            c_dir = clean_video_title(part)
+                            if not keep_vietnamese_accents:
+                                c_dir = remove_vietnamese_accents(c_dir)
+                            clean_dir_parts.append(c_dir if c_dir else f"folder_{p_idx + 1}")
+
+                        # Làm sạch tên file
+                        stem = original_file.stem
+                        clean_title_raw = clean_video_title(stem)
+                        if keep_vietnamese_accents:
+                            clean_filename = clean_title_raw + ".mp3"
+                        else:
+                            clean_filename = remove_vietnamese_accents(clean_title_raw) + ".mp3"
+
+                        # Tái tạo thư mục đích
+                        final_parent = effective_save_folder
+                        for c_dp in clean_dir_parts:
+                            final_parent = final_parent / c_dp
+                        final_parent.mkdir(parents=True, exist_ok=True)
+
+                        final_file_path = final_parent / clean_filename
+
+                        if original_file.resolve() != final_file_path.resolve():
+                            if final_file_path.is_file():
                                 try:
-                                    if not any(original_parent.iterdir()):
-                                        original_parent.rmdir()
+                                    final_file_path.unlink()
                                 except Exception:
                                     pass
+                            
+                            # Đổi tên file với cơ chế thử lại tránh WinError 32
+                            for attempt in range(10):
+                                try:
+                                    original_file.rename(final_file_path)
+                                    break
+                                except (PermissionError, OSError):
+                                    if attempt < 9:
+                                        time.sleep(1.0)
+                                    else:
+                                        raise
+
+                            # Dọn dẹp thư mục cũ trống nếu có
+                            curr = original_file.parent
+                            while curr.resolve() != effective_save_folder.resolve() and curr.is_dir():
+                                try:
+                                    if not any(curr.iterdir()):
+                                        curr.rmdir()
+                                        curr = curr.parent
+                                    else:
+                                        break
+                                except Exception:
+                                    break
+
+                        clean_parent_name = clean_dir_parts[0] if clean_dir_parts else ""
                         
                         if save_target == "drive":
                             if not drive_service.is_connected():
@@ -1141,16 +1200,21 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                             with open(final_file_path, "rb") as f_mp3:
                                 mp3_bytes = f_mp3.read()
 
-                            # Dọn dẹp xóa ngay lập tức file đĩa tạm trước khi bắt đầu upload
+                            # Dọn dẹp xóa ngay lập tức file đĩa tạm
                             try:
                                 if final_file_path.is_file():
                                     final_file_path.unlink()
-                                if final_parent != effective_save_folder and final_parent.is_dir() and not any(final_parent.iterdir()):
-                                    final_parent.rmdir()
+                                curr = final_parent
+                                while curr.resolve() != effective_save_folder.resolve() and curr.is_dir():
+                                    if not any(curr.iterdir()):
+                                        curr.rmdir()
+                                        curr = curr.parent
+                                    else:
+                                        break
                             except Exception:
                                 pass
 
-                            # Đẩy trực tiếp bytes từ RAM lên Drive với Semaphore giới hạn 2 upload đồng thời
+                            # Đẩy trực tiếp bytes từ RAM lên Drive
                             with DRIVE_UPLOAD_SEMAPHORE:
                                 drive_res = drive_service.upload_bytes_to_drive(
                                     mp3_bytes,
@@ -1159,7 +1223,6 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                                     progress_callback=on_drive_progress
                                 )
 
-                            # Giải phóng bộ nhớ RAM ngay lập tức
                             del mp3_bytes
                             gc.collect()
 
@@ -1174,7 +1237,6 @@ def run_single_download(link: str, quality: str, save_folder: Path, state_key: s
                                 drive_web_link=drive_res.get("webViewLink", "")
                             )
                         else:
-                            # Thêm bản ghi vào lịch sử phát nhạc (local)
                             add_to_history(
                                 link,
                                 clean_title_raw,
@@ -1342,7 +1404,7 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
             futures = {}
             for idx, link in enumerate(resolved_links):
                 state_key = f"item_{idx}"
-                fut = executor.submit(run_single_download, link, quality, save_folder, state_key, save_target, options)
+                fut = executor.submit(run_single_download, link, quality, save_folder, state_key, save_target, options, idx + 1)
                 futures[fut] = state_key
                 time.sleep(0.2)
                 
@@ -1489,7 +1551,9 @@ def download():
         "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
         "embed_thumbnail": bool(data.get("embed_thumbnail", False)),
         "no_subfolder": bool(data.get("no_subfolder", False)),
-        "skip_metadata": bool(data.get("skip_metadata", False))
+        "skip_metadata": bool(data.get("skip_metadata", False)),
+        "keep_vietnamese_accents": bool(data.get("keep_vietnamese_accents", False) or data.get("keep_accents", False)),
+        "custom_template": str(data.get("custom_template", "") or data.get("naming_template", "")).strip()
     }
 
     try:

@@ -1364,3 +1364,248 @@
 .yt-history-sync-btn:active {
   transform: scale(0.96) !important;
 }
+
+/* =========================================================
+   CẤU HÌNH CÚ PHÁP ĐẶT TÊN (CUSTOM TEMPLATE)
+   ========================================================= */
+
+.yt-template-config-box {
+  margin-top: 6px !important;
+  padding: 8px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  box-sizing: border-box !important;
+}
+
+.yt-template-guide-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #a8c7fa !important;
+  font-size: 10px !important;
+  cursor: pointer !important;
+  text-decoration: underline !important;
+  padding: 0 !important;
+}
+
+.yt-template-guide-btn:hover {
+  color: #ffffff !important;
+}
+
+.yt-template-input-wrap {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.yt-template-input-wrap input {
+  background: #282930 !important;
+  border: 1px solid #3c3d45 !important;
+  color: #e2e2e9 !important;
+  padding: 5px 8px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  font-family: monospace, Consolas, sans-serif !important;
+}
+
+.yt-template-input-wrap input:focus {
+  border-color: #a8c7fa !important;
+  outline: none !important;
+}
+
+.yt-template-input-wrap button {
+  padding: 5px 8px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+
+.yt-template-save-btn {
+  background: #a8c7fa !important;
+  color: #062e6f !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(168, 199, 250, 0.5) !important;
+  padding: 5px 10px !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  transition: all 0.2s ease !important;
+}
+
+.yt-template-save-btn:hover {
+  background: #c2c7e0 !important;
+  color: #000000 !important;
+  transform: translateY(-1px) !important;
+}
+
+.yt-template-save-btn:active {
+  transform: scale(0.95) !important;
+}
+
+.yt-template-save-btn.saved {
+  background: #c2efb3 !important;
+  color: #072711 !important;
+  border-color: #c2efb3 !important;
+}
+
+.yt-template-reset-btn {
+  background: #282930 !important;
+  border: 1px solid #3c3d45 !important;
+  color: #8e9099 !important;
+  padding: 5px 8px !important;
+}
+
+.yt-template-reset-btn:hover {
+  color: #e2e2e9 !important;
+  border-color: #a8c7fa !important;
+}
+
+.yt-template-presets {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+}
+
+.yt-preset-chip {
+  background: rgba(168, 199, 250, 0.08) !important;
+  border: 1px solid rgba(168, 199, 250, 0.2) !important;
+  color: #a8c7fa !important;
+  font-size: 9px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  font-family: monospace, Consolas, sans-serif !important;
+  transition: all 0.15s ease !important;
+}
+
+.yt-preset-chip:hover {
+  background: rgba(168, 199, 250, 0.2) !important;
+  border-color: #a8c7fa !important;
+  color: #ffffff !important;
+}
+
+.yt-template-guide-modal {
+  background: #1e1f29 !important;
+  border: 1px solid rgba(168, 199, 250, 0.3) !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  margin-top: 4px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  animation: fadeInModal 0.2s ease-out !important;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.yt-template-guide-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  color: #a8c7fa !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding-bottom: 4px !important;
+}
+
+.yt-template-guide-header button {
+  background: transparent !important;
+  border: none !important;
+  color: #8e9099 !important;
+  cursor: pointer !important;
+  font-size: 10px !important;
+  padding: 0 4px !important;
+}
+
+.yt-template-guide-header button:hover {
+  color: #ffb4ab !important;
+}
+
+.yt-template-guide-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  max-height: 140px !important;
+  overflow-y: auto !important;
+}
+
+.yt-tag-row {
+  font-size: 10px !important;
+  color: #c4c6d0 !important;
+  cursor: pointer !important;
+  padding: 2px 4px !important;
+  border-radius: 4px !important;
+  transition: background 0.15s ease !important;
+}
+
+.yt-tag-row:hover {
+  background: rgba(168, 199, 250, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.yt-tag-name {
+  color: #c2efb3 !important;
+  font-family: monospace, Consolas, sans-serif !important;
+}
+
+/* =========================================================
+   QUẢN LÝ MÁY CHỦ PYTHON SERVER
+   ========================================================= */
+
+.yt-server-manage-box {
+  margin-top: 6px !important;
+  padding: 8px 10px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+}
+
+.yt-restart-server-btn {
+  background: #282930 !important;
+  border: 1px solid #49454f !important;
+  color: #a8c7fa !important;
+  font-weight: 600 !important;
+  padding: 5px 10px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  transition: all 0.2s ease !important;
+}
+
+.yt-restart-server-btn:hover {
+  background: rgba(168, 199, 250, 0.15) !important;
+  border-color: #a8c7fa !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.yt-restart-server-btn:active {
+  transform: scale(0.95) !important;
+}
+
+.yt-restart-server-btn[disabled] {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}

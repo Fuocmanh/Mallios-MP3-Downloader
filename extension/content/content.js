@@ -290,8 +290,55 @@
               </select>
             </div>
 
+            <!-- CẤU HÌNH CÚ PHÁP ĐẶT TÊN (CUSTOM TEMPLATE) -->
+            <div class="yt-template-config-box">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #c4c6d0; font-size: 11px; font-weight: 600;">🏷️ Cú pháp lưu tên file:</span>
+                <button type="button" id="yt-btn-template-guide" class="yt-template-guide-btn" title="Xem danh sách các thẻ {placeholder}">
+                  ℹ️ Thẻ hỗ trợ
+                </button>
+              </div>
+              <div class="yt-template-input-wrap">
+                <input type="text" id="yt-custom-naming-template" placeholder="{uploader}/{title}" spellcheck="false" autocomplete="off">
+                <button type="button" id="yt-btn-template-save" class="yt-template-save-btn" title="Lưu cú pháp đặt tên này">💾 Lưu</button>
+                <button type="button" id="yt-btn-template-reset" class="yt-template-reset-btn" title="Đặt lại mẫu mặc định ({uploader}/{title})">🔄</button>
+              </div>
+              <!-- Preset gợi ý nhanh -->
+              <div class="yt-template-presets">
+                <span class="yt-preset-chip" data-template="{uploader}/{title}" title="Gom theo nghệ sĩ">{uploader}/{title}</span>
+                <span class="yt-preset-chip" data-template="{index} - {artist} - {title}" title="Có số thứ tự cho Playlist">{index} - {artist} - {title}</span>
+                <span class="yt-preset-chip" data-template="{title}" title="Chỉ lấy tên bài">{title}</span>
+                <span class="yt-preset-chip" data-template="{year}/{album}/{index} - {title}" title="Theo Năm & Album">{year}/{album}/{index} - {title}</span>
+              </div>
+              
+              <!-- POPUP / MODAL HƯỚNG DẪN THẺ PLACEHOLDER -->
+              <div id="yt-template-guide-modal" class="yt-template-guide-modal" style="display: none;">
+                <div class="yt-template-guide-header">
+                  <span>📖 Các thẻ cú pháp hỗ trợ:</span>
+                  <button type="button" id="yt-btn-close-template-guide">✕</button>
+                </div>
+                <div class="yt-template-guide-list">
+                  <div class="yt-tag-row" data-tag="{title}"><b class="yt-tag-name">{title}</b>: Tiêu đề bài hát (đã lọc rác)</div>
+                  <div class="yt-tag-row" data-tag="{artist}"><b class="yt-tag-name">{artist}</b>: Tên nghệ sĩ / ca sĩ</div>
+                  <div class="yt-tag-row" data-tag="{uploader}"><b class="yt-tag-name">{uploader}</b>: Tên kênh / người đăng tải</div>
+                  <div class="yt-tag-row" data-tag="{index}"><b class="yt-tag-name">{index}</b>: Số thứ tự bài (01, 02, 15...)</div>
+                  <div class="yt-tag-row" data-tag="{id}"><b class="yt-tag-name">{id}</b>: Mã ID video YouTube (11 ký tự)</div>
+                  <div class="yt-tag-row" data-tag="{album}"><b class="yt-tag-name">{album}</b>: Tên album bài hát (nếu có)</div>
+                  <div class="yt-tag-row" data-tag="{year}"><b class="yt-tag-name">{year}</b>: Năm phát hành (2024...)</div>
+                  <div class="yt-tag-row" data-tag="{date}"><b class="yt-tag-name">{date}</b>: Ngày đăng video (YYYYMMDD)</div>
+                </div>
+                <div style="font-size: 9px; color: #8e9099; margin-top: 4px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 4px;">
+                  💡 Bấm vào bất kỳ dòng nào ở trên để chèn nhanh thẻ vào ô nhập.
+                </div>
+              </div>
+            </div>
+
             <!-- TÙY CHỌN ÂM THANH & NÂNG CAO -->
             <div class="yt-advanced-options-box">
+              <label class="yt-checkbox-label" title="Giữ nguyên vẹn chữ cái tiếng Việt có dấu (Unicode) khi lưu tên file và thư mục">
+                <input type="checkbox" id="yt-opt-keep-accents">
+                <span>🇻🇳 Giữ nguyên dấu Tiếng Việt (UTF-8)</span>
+              </label>
               <label class="yt-checkbox-label" title="Lưu trực tiếp file MP3 vào thư mục chỉ định mà không tạo thư mục con theo tên ca sĩ / kênh">
                 <input type="checkbox" id="yt-opt-no-subfolder">
                 <span>📁 Lưu thẳng vào thư mục (Không tạo thư mục con)</span>
@@ -312,6 +359,19 @@
                 <input type="checkbox" id="yt-opt-fast-mode">
                 <span>⚡ Tải siêu tốc (Bỏ qua Metadata ID3)</span>
               </label>
+            </div>
+
+            <!-- QUẢN LÝ MÁY CHỦ PYTHON -->
+            <div class="yt-server-manage-box">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="color: #c4c6d0; font-size: 11px; font-weight: 600;">🐍 Máy chủ Python (Port 37491):</span>
+                  <span id="yt-server-status-detail" style="color: #8e9099; font-size: 10px;">🟢 Đang hoạt động tốt</span>
+                </div>
+                <button type="button" id="yt-btn-restart-server" class="yt-restart-server-btn" title="Khởi động lại máy chủ Python Backend">
+                  🔄 Reset Python
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -361,8 +421,32 @@
     const optSponsorBlock = document.getElementById('yt-opt-sponsorblock');
     const optThumbnail = document.getElementById('yt-opt-thumbnail');
     const optFastMode = document.getElementById('yt-opt-fast-mode');
+    const optKeepAccents = document.getElementById('yt-opt-keep-accents');
+    const customTemplateInput = document.getElementById('yt-custom-naming-template');
+    const templateSaveBtn = document.getElementById('yt-btn-template-save');
+    const templateResetBtn = document.getElementById('yt-btn-template-reset');
+    const templateGuideBtn = document.getElementById('yt-btn-template-guide');
+    const templateGuideModal = document.getElementById('yt-template-guide-modal');
+    const closeTemplateGuideBtn = document.getElementById('yt-btn-close-template-guide');
     const qualitySelect = document.getElementById('yt-quality-select');
     let currentStorageTarget = localStorage.getItem('yt_mp3_storage_target') || 'local';
+
+    function saveTemplateWithFeedback() {
+      syncSettingsToStorage();
+      const currentVal = customTemplateInput ? customTemplateInput.value.trim() : '';
+      const displayVal = currentVal || '{uploader}/{title} (Mặc định)';
+      showStatus(`💾 Đã lưu cú pháp đặt tên: ${displayVal}`, '#c2efb3');
+
+      if (templateSaveBtn) {
+        const origText = templateSaveBtn.innerHTML;
+        templateSaveBtn.innerHTML = '✅ Đã lưu';
+        templateSaveBtn.classList.add('saved');
+        setTimeout(() => {
+          templateSaveBtn.innerHTML = origText;
+          templateSaveBtn.classList.remove('saved');
+        }, 1500);
+      }
+    }
 
     function updateQuickBadges() {
       const targetBadge = document.getElementById('yt-quick-target-badge');
@@ -385,7 +469,9 @@
         yt_opt_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         yt_opt_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
         yt_opt_thumbnail: optThumbnail ? optThumbnail.checked : false,
-        yt_opt_fast_mode: optFastMode ? optFastMode.checked : false
+        yt_opt_fast_mode: optFastMode ? optFastMode.checked : false,
+        yt_opt_keep_accents: optKeepAccents ? optKeepAccents.checked : false,
+        yt_custom_naming_template: customTemplateInput ? customTemplateInput.value.trim() : ''
       };
       for (const [key, val] of Object.entries(settings)) {
         localStorage.setItem(key, typeof val === 'boolean' ? (val ? 'true' : 'false') : val);
@@ -432,6 +518,74 @@
       optFastMode.checked = localStorage.getItem('yt_opt_fast_mode') === 'true';
       optFastMode.addEventListener('change', () => syncSettingsToStorage());
     }
+    if (optKeepAccents) {
+      optKeepAccents.checked = localStorage.getItem('yt_opt_keep_accents') === 'true';
+      optKeepAccents.addEventListener('change', () => syncSettingsToStorage());
+    }
+    if (customTemplateInput) {
+      customTemplateInput.value = localStorage.getItem('yt_custom_naming_template') || '';
+      customTemplateInput.addEventListener('input', () => syncSettingsToStorage());
+      customTemplateInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveTemplateWithFeedback();
+        }
+      });
+    }
+    if (templateSaveBtn) {
+      templateSaveBtn.addEventListener('click', () => {
+        saveTemplateWithFeedback();
+      });
+    }
+    if (templateResetBtn && customTemplateInput) {
+      templateResetBtn.addEventListener('click', () => {
+        customTemplateInput.value = '';
+        syncSettingsToStorage();
+        showStatus('🔄 Đã đặt lại cú pháp tên mặc định ({uploader}/{title})', '#a8c7fa');
+      });
+    }
+
+    const presetChips = document.querySelectorAll('.yt-preset-chip');
+    presetChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        const tpl = chip.getAttribute('data-template');
+        if (tpl && customTemplateInput) {
+          customTemplateInput.value = tpl;
+          syncSettingsToStorage();
+          showStatus(`✅ Đã chọn mẫu: ${tpl}`, '#c2efb3');
+        }
+      });
+    });
+
+    if (templateGuideBtn && templateGuideModal) {
+      templateGuideBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        templateGuideModal.style.display = templateGuideModal.style.display === 'none' ? 'flex' : 'none';
+      });
+    }
+
+    if (closeTemplateGuideBtn && templateGuideModal) {
+      closeTemplateGuideBtn.addEventListener('click', () => {
+        templateGuideModal.style.display = 'none';
+      });
+    }
+
+    const tagRows = document.querySelectorAll('.yt-tag-row');
+    tagRows.forEach(row => {
+      row.addEventListener('click', () => {
+        const tag = row.getAttribute('data-tag');
+        if (tag && customTemplateInput) {
+          const start = customTemplateInput.selectionStart || customTemplateInput.value.length;
+          const end = customTemplateInput.selectionEnd || customTemplateInput.value.length;
+          const val = customTemplateInput.value;
+          customTemplateInput.value = val.substring(0, start) + tag + val.substring(end);
+          customTemplateInput.focus();
+          customTemplateInput.setSelectionRange(start + tag.length, start + tag.length);
+          syncSettingsToStorage();
+          showStatus(`➕ Đã chèn thẻ ${tag}`, '#c2efb3');
+        }
+      });
+    });
 
     // Tự động đồng bộ các thiết lập lên chrome.storage khi khởi chạy
     syncSettingsToStorage();
@@ -442,7 +596,9 @@
         enable_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         enable_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
         embed_thumbnail: optThumbnail ? optThumbnail.checked : false,
-        skip_metadata: optFastMode ? optFastMode.checked : false
+        skip_metadata: optFastMode ? optFastMode.checked : false,
+        keep_vietnamese_accents: optKeepAccents ? optKeepAccents.checked : false,
+        custom_template: customTemplateInput ? customTemplateInput.value.trim() : ''
       };
     }
 
@@ -538,15 +694,26 @@
     const serverStatusBadge = document.getElementById('yt-server-status-badge');
 
     function updateServerStatusBadge(isOnline) {
-      if (!serverStatusBadge) return;
-      if (isOnline) {
-        serverStatusBadge.className = 'yt-status-badge online';
-        serverStatusBadge.innerText = '🟢 Sẵn sàng';
-        serverStatusBadge.title = 'Máy chủ Mallios đang hoạt động tốt (127.0.0.1:37491)';
-      } else {
-        serverStatusBadge.className = 'yt-status-badge offline';
-        serverStatusBadge.innerText = '🔴 Offline (Mở run.bat)';
-        serverStatusBadge.title = 'Máy chủ chưa bật. Bấm vào đây hoặc mở tệp run.bat trong thư mục Mallios!';
+      const serverStatusDetail = document.getElementById('yt-server-status-detail');
+      if (serverStatusBadge) {
+        if (isOnline) {
+          serverStatusBadge.className = 'yt-status-badge online';
+          serverStatusBadge.innerText = '🟢 Sẵn sàng';
+          serverStatusBadge.title = 'Máy chủ Mallios đang hoạt động tốt (127.0.0.1:37491) - Bấm để Reset';
+        } else {
+          serverStatusBadge.className = 'yt-status-badge offline';
+          serverStatusBadge.innerText = '🔴 Offline (Mở run.bat)';
+          serverStatusBadge.title = 'Máy chủ chưa bật. Bấm vào đây để khởi động / kết nối!';
+        }
+      }
+      if (serverStatusDetail) {
+        if (isOnline) {
+          serverStatusDetail.style.color = '#c2efb3';
+          serverStatusDetail.innerText = '🟢 Đang hoạt động tốt (Port 37491)';
+        } else {
+          serverStatusDetail.style.color = '#ffb4ab';
+          serverStatusDetail.innerText = '🔴 Đang dừng / Chưa khởi động';
+        }
       }
     }
 
@@ -559,14 +726,69 @@
       }
     }
 
+    async function restartPythonServer() {
+      const restartServerBtn = document.getElementById('yt-btn-restart-server');
+      const serverStatusDetail = document.getElementById('yt-server-status-detail');
+
+      if (restartServerBtn) {
+        restartServerBtn.setAttribute('disabled', 'true');
+        restartServerBtn.innerHTML = '⏳ Đang Reset...';
+      }
+      if (serverStatusBadge) {
+        serverStatusBadge.className = 'yt-status-badge offline';
+        serverStatusBadge.innerText = '⏳ Đang Reset...';
+      }
+      if (serverStatusDetail) {
+        serverStatusDetail.style.color = '#a8c7fa';
+        serverStatusDetail.innerText = '⏳ Đang khởi động lại tiến trình Python...';
+      }
+      showStatus('⏳ Đang khởi động lại máy chủ Python...', '#a8c7fa');
+
+      try {
+        const res = await chrome.runtime.sendMessage({ type: 'restart-backend' });
+        if (res && res.ok) {
+          updateServerStatusBadge(true);
+          showStatus('🎉 Đã khởi động lại máy chủ Python thành công!', '#c2efb3');
+          if (restartServerBtn) restartServerBtn.innerHTML = '✅ Đã Reset';
+        } else {
+          updateServerStatusBadge(false);
+          showStatus('⚠️ Khởi động lại chưa hoàn tất. Bạn có thể mở tệp run.bat.', '#f2b8b5');
+          if (restartServerBtn) restartServerBtn.innerHTML = '⚠️ Thử lại';
+        }
+      } catch (err) {
+        updateServerStatusBadge(false);
+        showStatus('❌ Lỗi kết nối khi gửi yêu cầu reset server.', '#f2b8b5');
+        if (restartServerBtn) restartServerBtn.innerHTML = '❌ Lỗi';
+      } finally {
+        setTimeout(() => {
+          if (restartServerBtn) {
+            restartServerBtn.removeAttribute('disabled');
+            restartServerBtn.innerHTML = '🔄 Reset Python';
+          }
+        }, 2000);
+      }
+    }
+
+    const restartServerBtn = document.getElementById('yt-btn-restart-server');
+    if (restartServerBtn) {
+      restartServerBtn.addEventListener('click', restartPythonServer);
+    }
+
     if (serverStatusBadge) {
       serverStatusBadge.addEventListener('click', async () => {
-        serverStatusBadge.innerText = '⏳ Đang khởi động...';
-        try {
-          await chrome.runtime.sendMessage({ type: 'ensure-backend' });
-          await checkServerHealth();
-        } catch (_) {
-          updateServerStatusBadge(false);
+        if (serverStatusBadge.classList.contains('online')) {
+          const ok = confirm('Bạn có muốn khởi động lại (Reset) máy chủ Python không?');
+          if (ok) {
+            await restartPythonServer();
+          }
+        } else {
+          serverStatusBadge.innerText = '⏳ Đang kết nối...';
+          try {
+            await chrome.runtime.sendMessage({ type: 'ensure-backend' });
+            await checkServerHealth();
+          } catch (_) {
+            updateServerStatusBadge(false);
+          }
         }
       });
     }

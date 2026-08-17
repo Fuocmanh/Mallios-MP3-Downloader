@@ -209,6 +209,35 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "restart-backend") {
+    (async () => {
+      try {
+        await proxyApiRequest("/api/restart", { method: "POST" });
+      } catch (_) {}
+
+      if (nativePort) {
+        try { nativePort.disconnect(); } catch (_) {}
+        nativePort = null;
+      }
+
+      await new Promise((r) => setTimeout(r, 1200));
+      await ensureBackendRunning();
+
+      let online = false;
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 400));
+        const health = await checkServerHealth(false);
+        if (health && health.online) {
+          online = true;
+          break;
+        }
+      }
+
+      sendResponse({ ok: online, status: online ? "online" : "offline" });
+    })();
+    return true;
+  }
+
   if (message?.type === "api-request") {
     proxyApiRequest(message.path, message.options).then(sendResponse);
     return true;
@@ -271,7 +300,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         "yt_opt_no_subfolder",
         "yt_opt_loudnorm",
         "yt_opt_sponsorblock",
-        "yt_opt_thumbnail"
+        "yt_opt_thumbnail",
+        "yt_opt_keep_accents",
+        "yt_custom_naming_template"
       ]);
 
       const save_target = settings.yt_mp3_storage_target || "local";
@@ -281,6 +312,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const enable_loudnorm = !!settings.yt_opt_loudnorm;
       const enable_sponsorblock = !!settings.yt_opt_sponsorblock;
       const embed_thumbnail = !!settings.yt_opt_thumbnail;
+      const keep_accents = !!settings.yt_opt_keep_accents;
+      const custom_template = settings.yt_custom_naming_template || "";
 
       const res = await proxyApiRequest("/download", {
         method: "POST",
@@ -293,7 +326,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           no_subfolder: no_subfolder,
           enable_loudnorm: enable_loudnorm,
           enable_sponsorblock: enable_sponsorblock,
-          embed_thumbnail: embed_thumbnail
+          embed_thumbnail: embed_thumbnail,
+          keep_vietnamese_accents: keep_accents,
+          custom_template: custom_template
         })
       });
       

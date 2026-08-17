@@ -336,7 +336,7 @@ def select_folder():
     initial_path = str(req_data.get("initial_path", "")).strip()
     title = str(req_data.get("title", "Chọn thư mục lưu nhạc MP3")).strip()
 
-    # Tier 1: Sử dụng FolderPicker.exe hiện đại chuẩn Windows Explorer (IFileOpenDialog / FOS_PICKFOLDERS)
+    # Tier 1: Sử dụng FolderPicker.exe hiện đại chuẩn Windows Explorer (IFileOpenDialog / FOS_PICKFOLDERS + TopMost)
     if os.name == "nt" and FOLDER_PICKER_EXE.is_file():
         try:
             completed = subprocess.run(
@@ -351,66 +351,40 @@ def select_folder():
             folder = completed.stdout.strip()
             if folder and os.path.exists(folder):
                 return response({"status": "success", "path": str(Path(folder))})
-            elif completed.returncode == 0:
-                return response({"status": "cancel", "message": "Chưa chọn thư mục."})
+            elif completed.returncode == 2:
+                return response({"status": "cancel", "message": "Đã hủy chọn thư mục."})
         except Exception:
             pass
 
-    # Tier 2: PowerShell IFileOpenDialog hiện đại
+    # Tier 2: PowerShell với FolderBrowserDialog & TopMost Form an toàn
     if os.name == "nt":
         try:
-            clean_title = title.replace('"', '\\"')
-            clean_init = initial_path.replace('"', '\\"') if (initial_path and os.path.exists(initial_path)) else str(DEFAULT_DOWNLOAD_FOLDER).replace('"', '\\"')
+            clean_title = title.replace('"', '`"')
+            clean_init = (initial_path if initial_path and os.path.exists(initial_path) else str(DEFAULT_DOWNLOAD_FOLDER)).replace('"', '`"')
             ps_code = f"""
-            $code = @"
-            using System;
-            using System.Runtime.InteropServices;
-            public class MPicker {{
-                [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-                private static extern int SHCreateItemFromParsingName([MarshalAs(UnmanagedType.LPWStr)] string pszPath, IntPtr pbc, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItem ppv);
-                [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7"), ClassInterface(ClassInterfaceType.None)]
-                private class FileOpenDialogRCW {{ }}
-                [ComImport, Guid("d57c5270-705d-44e8-83d7-f421f640e1bd"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-                private interface IFileOpenDialog {{
-                    [PreserveSig] int Show(IntPtr parent);
-                    void SetFileTypes(); void SetFileTypeIndex(); void GetFileTypeIndex(); void Advise(); void Unadvise();
-                    void SetOptions(uint fos); void GetOptions(out uint fos); void SetDefaultFolder(IShellItem psi); void SetFolder(IShellItem psi);
-                    void GetFolder(out IShellItem ppsi); void GetCurrentSelection(out IShellItem ppsi);
-                    void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName); void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
-                    void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle); void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
-                    void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel); void GetResult(out IShellItem ppsi);
-                    void AddPlace(IShellItem psi, int alignment); void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
-                    void Close(int hr); void SetClientGuid(ref Guid guid); void ClearClientData(); void SetFilter([MarshalAs(UnmanagedType.Interface)] object pFilter);
-                    void GetResults(out IntPtr ppenum); void GetSelectedItems(out IntPtr ppsai);
-                }}
-                [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-                private interface IShellItem {{
-                    void BindToHandler(); void GetParent(); void GetDisplayName(uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
-                    void GetAttributes(); void Compare();
-                }}
-                public static string Pick(string t, string init) {{
-                    var d = (IFileOpenDialog)new FileOpenDialogRCW();
-                    d.SetOptions(0x20 | 0x40);
-                    if (!string.IsNullOrEmpty(t)) d.SetTitle(t);
-                    if (!string.IsNullOrEmpty(init) && System.IO.Directory.Exists(init)) {{
-                        var iid = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
-                        IShellItem item;
-                        if (SHCreateItemFromParsingName(init, IntPtr.Zero, ref iid, out item) == 0) d.SetFolder(item);
-                    }}
-                    if (d.Show(IntPtr.Zero) == 0) {{
-                        IShellItem res; d.GetResult(out res);
-                        if (res != null) {{ string p; res.GetDisplayName(0x80058000, out p); return p; }}
-                    }}
-                    return "";
-                }}
-            }}
-            "@
-            Add-Type -TypeDefinition $code -Language CSharp
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-            Write-Output ([MPicker]::Pick("{clean_title}", "{clean_init}"))
+            $fbd = New-Object System.Windows.Forms.FolderBrowserDialog
+            $fbd.Description = "{clean_title}"
+            $fbd.ShowNewFolderButton = $true
+            $fbd.SelectedPath = "{clean_init}"
+            $form = New-Object System.Windows.Forms.Form
+            $form.Size = New-Object System.Drawing.Size(1,1)
+            $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+            $form.Opacity = 0
+            $form.ShowInTaskbar = $false
+            $form.TopMost = $true
+            $form.Show()
+            $form.BringToFront()
+            $res = $fbd.ShowDialog($form)
+            $form.Close()
+            if ($res -eq [System.Windows.Forms.DialogResult]::OK -and $fbd.SelectedPath) {{
+                Write-Output $fbd.SelectedPath
+            }}
             """
             completed = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_code],
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_code],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -2033,7 +2007,7 @@ def open_folder():
     if request.method == "OPTIONS":
         return response({})
         
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     drive_link = data.get("drive_link")
     if drive_link:
         try:
@@ -2042,18 +2016,30 @@ def open_folder():
         except Exception as e:
             return response({"status": "error", "message": str(e)}, 500)
 
-    file_path_str = data.get("path")
+    file_path_str = str(data.get("path") or "").strip()
     if not file_path_str:
         return response({"status": "error", "message": "Thiếu đường dẫn tệp."}, 400)
         
-    path = Path(file_path_str)
-    if not path.is_file():
-        return response({"status": "error", "message": "Không tìm thấy tệp nhạc."}, 404)
-        
+    clean_path_str = file_path_str.replace("/", "\\")
+    path = Path(clean_path_str)
+    
     try:
-        # Mở thư mục và khoanh vùng tô đậm file trên Windows
-        subprocess.Popen(f'explorer /select,"{path}"')
-        return response({"status": "success"})
+        if path.is_file():
+            # Mở thư mục và tô đậm file chính xác trên Windows
+            norm_path = str(path.resolve()).replace("/", "\\")
+            subprocess.Popen(f'explorer /select,"{norm_path}"')
+            return response({"status": "success"})
+        elif path.parent.is_dir():
+            # Nếu file cụ thể không tìm thấy (do bị đổi tên/xóa), mở thư mục cha
+            norm_parent = str(path.parent.resolve()).replace("/", "\\")
+            subprocess.Popen(f'explorer "{norm_parent}"')
+            return response({"status": "success", "message": "Đã mở thư mục chứa bài hát."})
+        elif path.is_dir():
+            norm_dir = str(path.resolve()).replace("/", "\\")
+            subprocess.Popen(f'explorer "{norm_dir}"')
+            return response({"status": "success"})
+        else:
+            return response({"status": "error", "message": "Không tìm thấy tệp hoặc thư mục nhạc."}, 404)
     except Exception as e:
         return response({"status": "error", "message": str(e)}, 500)
 

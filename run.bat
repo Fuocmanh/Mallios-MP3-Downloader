@@ -14,6 +14,8 @@ set NEED_SETUP=0
 
 if not exist "tools\yt-dlp.exe" set NEED_SETUP=1
 if not exist "tools\ffmpeg.exe" set NEED_SETUP=1
+if not exist "tools\FolderPicker.exe" set NEED_SETUP=1
+if not exist "native-host\MalliosNativeHost.exe" set NEED_SETUP=1
 if not exist "runtime\python\python.exe" (
     if not exist ".venv\Scripts\python.exe" set NEED_SETUP=1
 )

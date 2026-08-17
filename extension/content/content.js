@@ -663,7 +663,7 @@
           syncSettingsToStorage();
           showStatus(`✅ Đã chọn: ${data.path}`, '#c2efb3');
         } else if (data.status === 'cancel') {
-          showStatus('', '');
+          showStatus('ℹ️ Đã hủy chọn thư mục.', '#8e9099');
         } else {
           showStatus(`⚠️ ${data.message || 'Chưa chọn thư mục'}`, '#f2b8b5');
         }
@@ -2873,10 +2873,16 @@ function getFileListOutput() {
             return;
           }
           try {
-            await apiFetch('/open-folder', {
+            const res = await apiFetch('/open-folder', {
               method: 'POST',
               body: JSON.stringify({ path: item.file_path, drive_link: item.drive_web_link })
             });
+            const data = await res.json();
+            if (data.status === 'success') {
+              showStatus(data.message ? `📁 ${data.message}` : '📁 Đã mở thư mục chứa nhạc.', '#c2efb3');
+            } else {
+              showStatus(`⚠️ ${data.message || 'Không thể mở thư mục!'}`, '#f2b8b5');
+            }
           } catch (_) {
             showStatus('❌ Không thể mở thư mục!', '#f2b8b5');
           }

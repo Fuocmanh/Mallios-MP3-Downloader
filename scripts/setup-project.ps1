@@ -176,10 +176,30 @@ Write-Host ""
 Write-Host "Dang thiet lap Native Host & Cong cu chon thu muc..." -ForegroundColor Yellow
 $folderPickerCs = Join-Path $ProjectRoot "tools\FolderPicker.cs"
 $folderPickerExe = Join-Path $ProjectRoot "tools\FolderPicker.exe"
-if ((Test-Path $folderPickerCs) -and (-not (Test-Path $folderPickerExe))) {
+if (Test-Path $folderPickerCs) {
+    $compiled = $false
     try {
-        Add-Type -TypeDefinition (Get-Content -Raw $folderPickerCs -Encoding UTF8) -OutputAssembly $folderPickerExe -OutputType ConsoleApplication
+        Add-Type -TypeDefinition (Get-Content -Raw $folderPickerCs -Encoding UTF8) -OutputAssembly $folderPickerExe -OutputType WindowsApplication -ReferencedAssemblies "System.Windows.Forms", "System.Drawing"
+        if (Test-Path $folderPickerExe) { $compiled = $true }
     } catch {}
+
+    if (-not $compiled) {
+        $cscPaths = @(
+            "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
+            "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+        )
+        foreach ($csc in $cscPaths) {
+            if (Test-Path $csc) {
+                try {
+                    & $csc /nologo /target:winexe /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:"$folderPickerExe" "$folderPickerCs" *>$null
+                    if (Test-Path $folderPickerExe) { $compiled = $true; break }
+                } catch {}
+            }
+        }
+    }
+    if ($compiled) {
+        Write-Host "      -> Da tao FolderPicker.exe thanh cong." -ForegroundColor Green
+    }
 }
 
 $nativeHostScript = Join-Path $ProjectRoot "scripts\install-native-host.ps1"

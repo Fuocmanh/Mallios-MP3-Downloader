@@ -42,6 +42,7 @@ downloads/*
 # Tools (giữ cấu trúc thư mục nhưng không đẩy file exe)
 tools/*
 !tools/.gitkeep
+!tools/*.cs
 
 # File nén & Runtimes nặng
 runtime/

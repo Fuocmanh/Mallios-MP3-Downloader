@@ -8,7 +8,26 @@ $sourceCs = Join-Path $nativeHostDir 'MalliosNativeHost.cs'
 # 1. Build host if missing
 if (-not (Test-Path $hostExePath)) {
     Write-Host "Dang bien dich MalliosNativeHost.exe..."
-    Add-Type -TypeDefinition (Get-Content -Raw $sourceCs -Encoding UTF8) -OutputAssembly $hostExePath -OutputType ConsoleApplication
+    $compiled = $false
+    try {
+        Add-Type -TypeDefinition (Get-Content -Raw $sourceCs -Encoding UTF8) -OutputAssembly $hostExePath -OutputType ConsoleApplication
+        if (Test-Path $hostExePath) { $compiled = $true }
+    } catch {}
+
+    if (-not $compiled) {
+        $cscPaths = @(
+            "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
+            "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+        )
+        foreach ($csc in $cscPaths) {
+            if (Test-Path $csc) {
+                try {
+                    & $csc /nologo /target:exe /out:"$hostExePath" "$sourceCs" *>$null
+                    if (Test-Path $hostExePath) { $compiled = $true; break }
+                } catch {}
+            }
+        }
+    }
 }
 
 # 2. Tao file manifest JSON chuan UTF-8 khong BOM

@@ -1,63 +1,39 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 title Mallios MP3 Downloader Server (127.0.0.1:37491)
-
+set "PORT=37491"
+set "HEALTH_URL=http://127.0.0.1:%PORT%/api/status"
 echo ======================================================
 echo   MALLIOS MP3 DOWNLOADER - KHOI DONG HE THONG
-echo   Dia chi: http://127.0.0.1:37491
+echo   Dia chi: %HEALTH_URL%
 echo ======================================================
 echo.
-
-rem Kiem tra xem may da co du cong cu va moi truong chua
-set NEED_SETUP=0
-
-if not exist "tools\yt-dlp.exe" set NEED_SETUP=1
-if not exist "tools\ffmpeg.exe" set NEED_SETUP=1
-if not exist "tools\FolderPicker.exe" set NEED_SETUP=1
-if not exist "native-host\MalliosNativeHost.exe" set NEED_SETUP=1
-if not exist "runtime\python\python.exe" (
-    if not exist ".venv\Scripts\python.exe" set NEED_SETUP=1
+rem Reuse a healthy backend; never kill an existing instance.
+curl.exe --fail --silent --show-error --max-time 2 "%HEALTH_URL%" >nul 2>&1
+if not errorlevel 1 (
+    echo [OK] Backend dang chay, tai su dung instance hien tai.
+    goto :end
 )
-
-rem Neu thieu bat ky thu gi (khi vua clone tu Git ve), tu dong chay cai dat
+set "NEED_SETUP=0"
+if not exist "tools\yt-dlp.exe" set "NEED_SETUP=1"
+if not exist "tools\ffmpeg.exe" set "NEED_SETUP=1"
+if not exist "tools\FolderPicker.exe" set "NEED_SETUP=1"
+if not exist "native-host\MalliosNativeHost.exe" set "NEED_SETUP=1"
+if not exist "runtime\python\python.exe" if not exist ".venv\Scripts\python.exe" set "NEED_SETUP=1"
 if "%NEED_SETUP%"=="1" (
-    echo [!] Phat hien he thong chua du cong cu hoac clone lan dau tu Git.
-    echo [*] Dang tu dong tai yt-dlp, ffmpeg va cai dat moi truong...
-    echo.
     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup-project.ps1"
-    echo.
-    echo [*] Cai dat hoan tat! Dang khoi dong may chu...
-    echo.
 )
-
-rem Tu dong kiem tra va cap nhat yt-dlp trong nen
-if exist "tools\yt-dlp.exe" (
-    start /b "" "tools\yt-dlp.exe" -U --no-check-certificate >nul 2>&1
-)
-
-rem Giai phong port 37491 neu co tien trinh cu dang chiem giu
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :37491 ^| findstr LISTENING') do (
-    taskkill /f /pid %%a >nul 2>&1
-)
-
-echo ======================================================
-echo   MAY CHU DANG CHAY TAI: http://127.0.0.1:37491
-echo   (Vui long de cua so nay mo khi su dung Extension)
-echo ======================================================
-echo.
-
+echo [OK] Dang khoi dong backend duy nhat...
 if exist "runtime\python\python.exe" (
     "runtime\python\python.exe" "backend\app.py"
-    goto end
+    goto :end
 )
-
 if exist ".venv\Scripts\python.exe" (
     ".venv\Scripts\python.exe" "backend\app.py"
-    goto end
+    goto :end
 )
-
 python "backend\app.py"
-
 :end
+endlocal
 pause

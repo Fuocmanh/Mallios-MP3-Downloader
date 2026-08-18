@@ -48,6 +48,27 @@ function ensureBackendRunning() {
   return pendingEnsurePromise;
 }
 
+const API_REQUEST_TIMEOUT_MS = 15000;
+async function fetchApiWithTimeout(url, fetchOptions, timeoutMs = API_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await fetch(url, { ...fetchOptions, signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+}
+let sharedProgressTimer = null;
+function ensureSharedProgressMonitor() {
+  if (sharedProgressTimer) return;
+  sharedProgressTimer = setInterval(async () => {
+    try {
+      const res = await proxyApiRequest('/api/state-snapshot', { method: 'GET' });
+      const snapshot = JSON.parse(res.body || '{}');
+      const data = snapshot.progress || snapshot;
+      broadcastToTabs({ type: 'mallios-state-snapshot-sync', data: snapshot });
+      if (['completed', 'failed', 'cancelled', 'idle'].includes(data.status)) { clearInterval(sharedProgressTimer); sharedProgressTimer = null; }
+    } catch (_) {}
+  }, 700);
+}
+
 async function proxyApiRequest(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
   const fetchOptions = {
@@ -59,10 +80,14 @@ async function proxyApiRequest(path, options = {}) {
   }
 
   try {
-    const res = await fetch(url, fetchOptions);
+    const res = await fetchApiWithTimeout(url, fetchOptions);
     const text = await res.text();
+    if (path === '/download') { try { const body = JSON.parse(text || '{}'); if (body.status === 'success') ensureSharedProgressMonitor(); } catch (_) {} }
     return { ok: res.ok, status: res.status, body: text };
   } catch (initialError) {
+    if (initialError?.name === "AbortError") {
+      return { ok: false, status: 504, body: JSON.stringify({ status: "error", message: "Backend không phản hồi trong thời gian cho phép." }) };
+    }
     // Tu dong kich hoat server qua Native Host va doi
     await ensureBackendRunning();
 
@@ -70,8 +95,9 @@ async function proxyApiRequest(path, options = {}) {
     for (let attempt = 0; attempt < 12; attempt++) {
       await new Promise((r) => setTimeout(r, 500));
       try {
-        const retryRes = await fetch(url, fetchOptions);
+        const retryRes = await fetchApiWithTimeout(url, fetchOptions);
         const retryText = await retryRes.text();
+    if (path === '/download') { try { const body = JSON.parse(retryText || '{}'); if (body.status === 'success') ensureSharedProgressMonitor(); } catch (_) {} }
         return { ok: retryRes.ok, status: retryRes.status, body: retryText };
       } catch (_) {}
     }

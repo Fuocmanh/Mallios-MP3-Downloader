@@ -351,6 +351,10 @@
                 <input type="checkbox" id="yt-opt-sponsorblock">
                 <span>🛑 Cắt intro / tài trợ (SponsorBlock)</span>
               </label>
+              <label class="yt-checkbox-label" title="Tách mỗi chapter của video thành một file MP3 riêng (mặc định tắt)">
+                <input type="checkbox" id="yt-opt-split-chapters">
+                <span>✂️ Tách theo chapter thành nhiều file</span>
+              </label>
               <label class="yt-checkbox-label" title="Nhúng ảnh bìa chất lượng cao vào bên trong file MP3">
                 <input type="checkbox" id="yt-opt-thumbnail">
                 <span>🖼️ Nhúng ảnh bìa vào MP3</span>
@@ -424,6 +428,7 @@
     const optNoSubfolder = document.getElementById('yt-opt-no-subfolder');
     const optLoudnorm = document.getElementById('yt-opt-loudnorm');
     const optSponsorBlock = document.getElementById('yt-opt-sponsorblock');
+    const optSplitChapters = document.getElementById('yt-opt-split-chapters');
     const optThumbnail = document.getElementById('yt-opt-thumbnail');
     const optFastMode = document.getElementById('yt-opt-fast-mode');
     const optKeepAccents = document.getElementById('yt-opt-keep-accents');
@@ -473,6 +478,7 @@
         yt_opt_no_subfolder: optNoSubfolder ? optNoSubfolder.checked : false,
         yt_opt_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         yt_opt_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
+        yt_opt_split_chapters: optSplitChapters ? optSplitChapters.checked : false,
         yt_opt_thumbnail: optThumbnail ? optThumbnail.checked : false,
         yt_opt_fast_mode: optFastMode ? optFastMode.checked : false,
         yt_opt_keep_accents: optKeepAccents ? optKeepAccents.checked : false,
@@ -514,6 +520,10 @@
           updateSponsorBlockState(optSponsorBlock.checked);
         }
       });
+    }
+    if (optSplitChapters) {
+      optSplitChapters.checked = localStorage.getItem('yt_opt_split_chapters') === 'true';
+      optSplitChapters.addEventListener('change', () => syncSettingsToStorage());
     }
     if (optThumbnail) {
       optThumbnail.checked = localStorage.getItem('yt_opt_thumbnail') === 'true';
@@ -600,6 +610,7 @@
         no_subfolder: optNoSubfolder ? optNoSubfolder.checked : false,
         enable_loudnorm: optLoudnorm ? optLoudnorm.checked : false,
         enable_sponsorblock: optSponsorBlock ? optSponsorBlock.checked : false,
+        split_chapters: optSplitChapters ? optSplitChapters.checked : false,
         embed_thumbnail: optThumbnail ? optThumbnail.checked : false,
         skip_metadata: optFastMode ? optFastMode.checked : false,
         keep_vietnamese_accents: optKeepAccents ? optKeepAccents.checked : false,
@@ -1206,6 +1217,8 @@ function getFileListOutput() {
     }
 
     checkInitialProgress();
+      if (typeof loadHistoryList === 'function') loadHistoryList();
+      updateQuickBadges();
 
     function updateWindowPosition() {
       const bubbleRect = bubble.getBoundingClientRect();
@@ -1591,7 +1604,31 @@ function getFileListOutput() {
       }
     }
 
+    // SPA state hub: one source of truth for reload-safe UI synchronization.
+    const MalliosStore = (() => {
+      const STORAGE_KEY = 'yt-mp3-spa-state-v1';
+      let state = { activeTab: 'quick', download: { status: 'idle', percent: 0, message: '' }, updatedAt: 0 };
+      const listeners = new Set();
+      try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); state = { ...state, ...saved, download: { ...state.download, ...(saved.download || {}) } }; } catch (_) {}
+      return {
+        get() { return state; },
+        set(partial) { state = { ...state, ...partial, download: { ...state.download, ...(partial.download || {}) }, updatedAt: Date.now() }; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {} listeners.forEach(fn => { try { fn(state); } catch (_) {} }); return state; },
+        subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+      };
+    })();
+    window.MalliosStore = MalliosStore;
+    window.addEventListener('storage', (event) => {
+      if (event.key !== 'yt-mp3-spa-state-v1' || !event.newValue) return;
+      try { const next = JSON.parse(event.newValue); if (next.download) applyProgressData(next.download); } catch (_) {}
+    });
+    setTimeout(() => {
+      const persistedDownload = MalliosStore.get().download;
+      if (persistedDownload && persistedDownload.status && persistedDownload.status !== 'idle') applyProgressData(persistedDownload);
+    }, 0);
+
+
     function applyProgressData(data) {
+      if (data && typeof data === 'object') MalliosStore.set({ download: data });
       if (!data) return;
 
       const quickBtn = document.getElementById('yt-btn-quick-download');
@@ -1616,7 +1653,9 @@ function getFileListOutput() {
 
         const activeInfo = getActiveDownloadBtnInfo();
         if (activeInfo.btn) {
-          activeInfo.btn.innerHTML = data.percent > 0 ? `⏳ ${data.percent}%` : `⏳ Đang tải...`;
+          const total = Number(data.total || data.total_files || 0);
+          const completed = Number(data.completed || data.completed_count || 0);
+          activeInfo.btn.innerHTML = data.percent > 0 ? `⏳ ${data.percent}%` : (total > 0 ? `⏳ ${completed}/${total}` : `⏳ Đang chuẩn bị...`);
         }
       } else if (data.status === 'completed') {
         if (progressInterval) {
@@ -1687,26 +1726,33 @@ function getFileListOutput() {
 
       applyProgressData({ status: 'running', percent: 0, message: 'Đang chuẩn bị tải...' });
 
+      let progressRequestInFlight = false;
       progressInterval = setInterval(async () => {
+        if (progressRequestInFlight) return;
+        progressRequestInFlight = true;
         try {
           const res = await apiFetch('/api/progress', { method: 'GET' });
           const data = await res.json();
           applyProgressData(data);
         } catch (err) {
-          if (progressInterval) {
-            clearInterval(progressInterval);
-            progressInterval = null;
-          }
-          bubble.classList.remove('loading');
-          updateBubbleDownloadProgress('idle');
-          restoreAllDownloadButtons();
-          updateCount();
+          console.warn('[Mallios] Progress polling failed:', err);
+        } finally {
+          progressRequestInFlight = false;
         }
-      }, 500);
+      }, 700);
     }
 
     async function checkInitialProgress() {
       if (document.hidden) return;
+      try {
+        const snapshotRes = await apiFetch('/api/state-snapshot', { method: 'GET' });
+        const snapshot = await snapshotRes.json();
+        if (snapshot && snapshot.progress) applyProgressData(snapshot.progress);
+        if (snapshot && Array.isArray(snapshot.history)) {
+          window.dispatchEvent(new CustomEvent('mallios-history-snapshot', { detail: snapshot.history }));
+        }
+        return;
+      } catch (_) {}
       try {
         const res = await apiFetch('/api/progress', { method: 'GET' });
         const data = await res.json();
@@ -1723,6 +1769,8 @@ function getFileListOutput() {
           return true;
         }
 
+  if (message?.type === 'mallios-state-snapshot-sync') { const snapshot = message.data || {}; if (snapshot.progress) applyProgressData(snapshot.progress); if (Array.isArray(snapshot.history)) window.dispatchEvent(new CustomEvent('mallios-history-snapshot', { detail: snapshot.history })); return; }
+        if (message?.type === 'mallios-state-sync') { applyProgressData(message.data || {}); return; }
         if (message?.type === 'mallios-download-progress') {
           applyProgressData(message.data);
           sendResponse && sendResponse({ ok: true });
@@ -2289,6 +2337,7 @@ function getFileListOutput() {
 
     // --- BỘ NHỚ ĐỆM DIRECT AUDIO STREAM TRỰC TIẾP (PREVIEW STREAM CACHE) ---
     const previewStreamUrlCache = new Map();
+    let previewUnavailableNoticeAt = 0;
 
     async function fetchDirectStreamUrl(url) {
       if (!url) return null;
@@ -2301,6 +2350,9 @@ function getFileListOutput() {
         if (res.ok) {
           const data = await res.json();
           if (data.status === 'success' && data.direct_url) {
+          } else if (data.status === 'unavailable' && Date.now() - previewUnavailableNoticeAt > 8000) {
+            previewUnavailableNoticeAt = Date.now();
+            showStatus('⚠️ YouTube đang giới hạn hoặc video không khả dụng; tải local vẫn có thể tiếp tục.', '#f2b8b5');
             previewStreamUrlCache.set(cleanUrl, data.direct_url);
             return data.direct_url;
           }
@@ -2847,6 +2899,7 @@ function getFileListOutput() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             urls: allUrls,
+            items: uniqueItems.map(item => ({ url: item.url, title: item.title })),
             save_folder: pathInput.value.trim(),
             save_target: currentStorageTarget
           })

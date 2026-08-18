@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Mallios MP3 Downloader",
+  "version": "3.8",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3FMDrkrUKzt3IxDjDpLhQVOYjT8zqz+JB9twR/S4Nb31gA79QezlGPA+WoRy6nnTUxxdJUQQYN1tJEAdrEPXmCZp3kZkmgm5nJvY7tqJWBCHTqHf8pZFeQhA2tLM2yoUEOgv+JW1ohor/jPaCnu6wkYAFKPnE08Rc7dPCZ/dCVyu6R+sppbDBEj1H9Tx/xba3qHcU1XnbXUcGLNabLzqlXg9r9EYTHkR+iBggM66pzlZGGjjAb33hnERl3pbIwCXdqlJaW/m+MTnJJOASMaye6f1Iuwy9lxheG2FHwEkgutalSAjstJifqXSWk0tIVejIjld6nElTlm+FaJmr7+jLQIDAQAB",
+  "description": "Tải audio YouTube thành MP3 qua Mallios local server.",
+  "permissions": [
+    "storage",
+    "nativeMessaging",
+    "identity",
+    "notifications",
+    "contextMenus",
+    "cookies"
+  ],
+  "oauth2": {
+    "client_id": "758509378393-cl3d0a9n3g87iukck10e30g49uphq0g5.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "http://127.0.0.1:5000/*",
+    "http://127.0.0.1:37491/*",
+    "https://*.youtube.com/*",
+    "https://*.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://music.youtube.com/*",
+        "https://soundcloud.com/*"
+      ],
+      "css": [
+        "content/content.css"
+      ],
+      "js": [
+        "content/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/bear-icon.png",
+    "48": "icons/bear-icon.png",
+    "128": "icons/bear-icon.png"
+  }
+}

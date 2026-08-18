@@ -601,6 +601,13 @@ def normalize_fullwidth_chars(text: str) -> str:
 def clean_video_title(title: str) -> str:
     # 0. Chuẩn hóa ký tự fullwidth Windows về ký tự thường để dễ xử lý
     title = normalize_fullwidth_chars(title)
+    # Loại tiền tố nhà phát hành thường bị nhúng vào title metadata.
+    title = re.sub(r'^\s*Vie\s+Channel\s*-\s*MUSIC\s*-\s*', '', title, flags=re.IGNORECASE)
+    # Loại nhãn MV/Lyrics/Performance/Visualizer/OST trong ngoặc vuông hoặc tròn.
+    title = re.sub(r'\[(?=[^\]]*(?:official|lyrics|mv|music\s+video|visualizer|performance|ost|live|audio|4k|hd))[^\]]*\]', '', title, flags=re.IGNORECASE)
+    title = re.sub(r'\((?=[^\)]*(?:official|lyrics|mv|music\s+video|visualizer|performance|ost|live|audio|4k|hd))[^\)]*\)', '', title, flags=re.IGNORECASE)
+    # Loại hậu tố chương trình Rap Việt khi nó nằm sau tên bài hát.
+    title = re.sub(r'\s*-\s*Team\s+[^|]+?\s+Rap\s+Vi[eệ]t\s*(?:\d{4})?\s*$', '', title, flags=re.IGNORECASE)
     
     # 1. Loại bỏ các cụm từ thừa (cả hoa lẫn thường)
     junk_patterns = [
@@ -814,7 +821,7 @@ def add_to_history(
         save_history(history)
 
 
-def build_output_template(custom_template: str, item_index: int = 1, no_subfolder: bool = False) -> str:
+def build_output_template(custom_template: str, item_index: int = 1, no_subfolder: bool = False, split_chapters: bool = False) -> str:
     """Chuyển đổi các biến {placeholder} sang định dạng template chuẩn của yt-dlp."""
     template = (custom_template or "").strip()
     if not template:
@@ -843,6 +850,8 @@ def build_output_template(custom_template: str, item_index: int = 1, no_subfolde
             pattern = re.compile(re.escape(tag), re.IGNORECASE)
             template = pattern.sub(ytdlp_tag, template)
 
+    if split_chapters:
+        template = template + " - %(section_number)02d %(section_title)s"
     return f"{template}.%(ext)s"
 
 
@@ -879,6 +888,7 @@ def run_single_download(
         options = {}
     enable_loudnorm = bool(options.get("enable_loudnorm", False))
     enable_sponsorblock = bool(options.get("enable_sponsorblock", False))
+    split_chapters = bool(options.get("split_chapters", False))
     embed_thumbnail = bool(options.get("embed_thumbnail", False))
     no_subfolder = bool(options.get("no_subfolder", False))
     skip_metadata = bool(options.get("skip_metadata", False))
@@ -941,7 +951,7 @@ def run_single_download(
     if enable_loudnorm:
         postprocessor_args += " -af loudnorm=I=-16:TP=-1.5:LRA=11"
 
-    output_template = build_output_template(custom_template, item_index=item_index, no_subfolder=no_subfolder)
+    output_template = build_output_template(custom_template, item_index=item_index, no_subfolder=no_subfolder, split_chapters=split_chapters)
 
     arguments = [
         "--encoding", "utf-8",
@@ -967,6 +977,8 @@ def run_single_download(
         "--postprocessor-args", postprocessor_args
     ]
     
+    if split_chapters:
+        arguments.append("--split-chapters")
     if not skip_metadata:
         arguments.append("--add-metadata")
     
@@ -1376,6 +1388,10 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
         resolved_links = resolved_links[:max_files]
         
     total_files = len(resolved_links)
+    with PROGRESS_LOCK:
+        PROGRESS_STATE["total"] = total_files
+        PROGRESS_STATE["completed"] = 0
+        PROGRESS_STATE["current"] = 0
     if total_files == 0:
         with PROGRESS_LOCK:
             PROGRESS_STATE["status"] = "completed"
@@ -1425,6 +1441,9 @@ def run_parallel_downloads_background(links: list[str], quality: str, save_folde
                             
                     avg_percent = total_percent / total_files
                     PROGRESS_STATE["percent"] = round(avg_percent, 1)
+                    PROGRESS_STATE["total"] = total_files
+                    PROGRESS_STATE["completed"] = completed_count
+                    PROGRESS_STATE["current"] = (completed_count + 1) if completed_count < total_files else total_files
                     
                     if completed_count < total_files:
                         if active_downloading:
@@ -1506,6 +1525,25 @@ def get_progress():
         return response(state_copy)
 
 
+@app.route("/api/state-snapshot", methods=["GET", "POST", "OPTIONS"])
+def get_state_snapshot():
+    """Return one reload-safe snapshot shared by all extension views."""
+    if request.method == "OPTIONS":
+        return response({"status": "ok"})
+    data = request.get_json(silent=True) or {}
+    with PROGRESS_LOCK:
+        progress = dict(PROGRESS_STATE)
+        progress["workers"] = {str(k): dict(v) for k, v in progress.get("workers", {}).items()} if isinstance(progress.get("workers"), dict) else {}
+    history = load_history()
+    return response({
+        "status": "success",
+        "server_time": time.time(),
+        "progress": progress,
+        "history": history,
+        "history_count": len(history),
+        "backend_instance": os.getpid()
+    })
+
 @app.route("/download", methods=["POST", "OPTIONS"])
 @app.route("/download-parallel", methods=["POST", "OPTIONS"])
 def download():
@@ -1528,6 +1566,11 @@ def download():
     if isinstance(raw_links, str):
         raw_links = [raw_links]
     links = normalize_links(raw_links)
+    with PROGRESS_LOCK:
+        PROGRESS_STATE["total"] = len(links)
+        PROGRESS_STATE["completed"] = 0
+        PROGRESS_STATE["current"] = 0
+        PROGRESS_STATE["message"] = f"Đang chuẩn bị {len(links)} bài..."
     if not links:
         with PROGRESS_LOCK:
             PROGRESS_STATE["status"] = "failed"
@@ -1549,6 +1592,7 @@ def download():
     download_options = {
         "enable_loudnorm": bool(data.get("enable_loudnorm", False)),
         "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
+        "split_chapters": bool(data.get("split_chapters", False)),
         "embed_thumbnail": bool(data.get("embed_thumbnail", False)),
         "no_subfolder": bool(data.get("no_subfolder", False)),
         "skip_metadata": bool(data.get("skip_metadata", False)),
@@ -1607,6 +1651,7 @@ def retry_failed():
     download_options = {
         "enable_loudnorm": bool(data.get("enable_loudnorm", False)),
         "enable_sponsorblock": bool(data.get("enable_sponsorblock", False)),
+        "split_chapters": bool(data.get("split_chapters", False)),
         "embed_thumbnail": bool(data.get("embed_thumbnail", False)),
         "no_subfolder": bool(data.get("no_subfolder", False)),
         "skip_metadata": bool(data.get("skip_metadata", False))
@@ -1867,7 +1912,7 @@ def play_audio():
 PREVIEW_STREAM_CACHE: dict[str, tuple[str, float]] = {}
 PREVIEW_CACHE_LOCK = threading.Lock()
 IN_FLIGHT_FETCHES: dict[str, threading.Event] = {}
-PRELOAD_EXECUTOR = ThreadPoolExecutor(max_workers=8)
+PRELOAD_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 YTDLP_INSTANCE = None
 YTDLP_INSTANCE_LOCK = threading.Lock()
 LAST_COOKIE_MTIME = 0
@@ -2013,7 +2058,8 @@ def preview_info():
 
     direct_url = get_direct_stream_url(video_url)
     if not direct_url:
-        return response({"status": "error", "message": "Không thể lấy luồng âm thanh nghe thử."}, 500)
+        # Video bị YouTube rate-limit/unavailable không phải lỗi server của Mallios.
+        return response({"status": "unavailable", "code": "preview_unavailable", "message": "Không thể xem trước bài này lúc này; YouTube đang giới hạn hoặc video không khả dụng."}, 200)
 
     return response({"status": "success", "direct_url": direct_url})
 
@@ -2030,7 +2076,8 @@ def preview_stream():
 
     direct_url = get_direct_stream_url(video_url)
     if not direct_url:
-        return response({"status": "error", "message": "Không thể lấy luồng âm thanh nghe thử."}, 500)
+        # Video bị YouTube rate-limit/unavailable không phải lỗi server của Mallios.
+        return response({"status": "unavailable", "code": "preview_unavailable", "message": "Không thể xem trước bài này lúc này; YouTube đang giới hạn hoặc video không khả dụng."}, 200)
 
     return redirect(direct_url, code=302)
 
@@ -2044,7 +2091,7 @@ def preload_playlist():
     urls = data.get("urls", [])
     if isinstance(urls, list) and urls:
         # Nạp trước tối đa 15 bài đầu tiên vào RAM cache song song
-        background_preload_streams(urls[:15])
+        background_preload_streams(urls[:3])
     return response({"status": "success"})
 
 
@@ -2309,67 +2356,50 @@ def get_local_ip():
 
 @app.route("/api/check-duplicates-batch", methods=["POST", "OPTIONS"])
 def check_duplicates_batch():
-    """Kiểm tra hàng loạt danh sách URL xem bài nào đã tồn tại trong thư mục lưu hoặc lịch sử."""
+    """Return one canonical availability result per requested video URL."""
     if request.method == "OPTIONS":
         return response({"status": "ok"})
     data = request.get_json(silent=True) or {}
-    urls = data.get("urls", [])
+    if not isinstance(data, dict):
+        data = {}
+    urls = data.get("urls") or []
+    if isinstance(urls, str):
+        urls = [urls]
+    urls = [str(u).strip() for u in urls if str(u).strip()]
+    item_titles = {}
+    for item in (data.get("items") or []):
+        if isinstance(item, dict):
+            raw_url = str(item.get("url", "")).strip()
+            if raw_url: item_titles[raw_url] = str(item.get("title", "")).strip()
     raw_folder = str(data.get("save_folder", "")).strip()
-    save_target = str(data.get("save_target", "local")).strip()
-
     requested_folder = Path(raw_folder) if raw_folder else None
     save_folder = requested_folder if requested_folder and requested_folder.is_dir() else DEFAULT_DOWNLOAD_FOLDER
     history_records = load_history()
-
-    results = {}
-    if save_target == "drive":
-        drive_history_urls = set()
-        drive_history_vids = set()
-        for item in history_records:
-            if item.get("storage_type") == "drive":
-                u = item.get("url", "")
-                if u:
-                    drive_history_urls.add(u.split("&")[0].strip())
-                vid = item.get("video_id") or extract_youtube_video_id(u)
-                if vid:
-                    drive_history_vids.add(vid)
-        for u in urls:
-            norm_u = u.split("&")[0].strip()
-            vid = extract_youtube_video_id(u)
-            results[u] = (norm_u in drive_history_urls) or (bool(vid) and vid in drive_history_vids)
-        return response({"status": "success", "duplicates": results})
-
-    # Nếu lưu trên máy, kết hợp quét lịch sử và quét file thực tế trên ổ cứng
-    existing_files_normalized = set()
-    if save_folder and save_folder.is_dir():
-        try:
-            for p in list(save_folder.glob("*.mp3")) + list(save_folder.glob("*/*.mp3")):
-                norm_name = normalize_title_for_check(p.stem)
-                existing_files_normalized.add(norm_name)
-                if " - " in norm_name:
-                    existing_files_normalized.add(norm_name.split(" - ", 1)[1].strip())
-        except Exception:
-            pass
-
-    history_local_urls = set()
-    history_local_vids = set()
+    history_urls = set()
+    history_vids = set()
     for item in history_records:
-        if item.get("storage_type", "local") == "local":
-            u = item.get("url", "")
-            if u:
-                history_local_urls.add(u.split("&")[0].strip())
-            vid = item.get("video_id") or extract_youtube_video_id(u)
-            if vid:
-                history_local_vids.add(vid)
-
-    for u in urls:
-        norm_u = u.split("&")[0].strip()
-        vid = extract_youtube_video_id(u)
-        is_dup = (norm_u in history_local_urls) or (bool(vid) and vid in history_local_vids)
-        results[u] = is_dup
-
+        if item.get("storage_type", "local") != "local": continue
+        url = str(item.get("url", "")).strip()
+        if url: history_urls.add(url.split("&", 1)[0])
+        vid = item.get("video_id") or extract_youtube_video_id(url)
+        if vid: history_vids.add(vid)
+    existing_titles = set()
+    try:
+        for path in list(save_folder.glob("*.mp3")) + list(save_folder.glob("*/*.mp3")):
+            normalized = normalize_title_for_check(path.stem)
+            if normalized: existing_titles.add(normalized)
+            if " - " in normalized: existing_titles.add(normalized.split(" - ", 1)[1].strip())
+    except Exception:
+        pass
+    results = {}
+    for url in urls:
+        canonical = url.split("&", 1)[0].strip()
+        vid = extract_youtube_video_id(url)
+        title = item_titles.get(url) or item_titles.get(canonical) or ""
+        title_key = normalize_title_for_check(title)
+        title_dup = bool(title_key) and any(title_key == existing or (len(title_key) >= 12 and title_key in existing) or (len(existing) >= 12 and existing in title_key) for existing in existing_titles)
+        results[url] = bool(canonical in history_urls or (vid and vid in history_vids) or title_dup)
     return response({"status": "success", "duplicates": results})
-
 
 def auto_update_ytdlp_background():
     """Tự động kiểm tra và cập nhật yt-dlp lên bản mới nhất trong nền khi khởi động."""
